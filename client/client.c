@@ -344,6 +344,15 @@ int client_handle_server_message(
 }
 
 int main(int argc, char **argv) {
+    /* FIXME: placeholder start */
+    client_ui_init();
+    client_ui_render_state_v2(NULL);
+    
+    getc(stdin);
+
+    return 0;
+    /* FIXME: placeholder end */
+
     client_ctx_t ctx;
     long port;
 

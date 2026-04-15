@@ -36,6 +36,11 @@ int client_build_command(
     bool *should_quit
 );
 
+/* TODO: remove */
 void client_render_state(const client_ctx_t *ctx);
+
+int client_ui_init();
+/* TODO: rename */
+int client_ui_render_state_v2(const client_ctx_t *ctx);
 
 #endif
