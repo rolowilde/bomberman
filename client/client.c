@@ -93,6 +93,12 @@ int client_handle_server_message(
         case MSG_HELLO: {
             msg_hello_t hello;
             if (proto_decode_hello_payload(&hello, payload, payload_len) == 0) {
+                if (header->sender_id >= 1 && header->sender_id <= MAX_PLAYERS) {
+                    player_t *player = &ctx->state.players[header->sender_id - 1];
+                    player->id = header->sender_id;
+                    strncpy(player->name, hello.player_name, MAX_NAME_LEN);
+                    player->name[MAX_NAME_LEN] = '\0';
+                }
                 printf("[server] player joined: %s\n", hello.player_name);
             }
             break;
@@ -108,6 +114,13 @@ int client_handle_server_message(
             ctx->player_id = header->sender_id;
             ctx->has_welcome = true;
             ctx->state.status = (game_status_t)welcome.game_status;
+
+            if (ctx->player_id >= 1 && ctx->player_id <= MAX_PLAYERS) {
+                player_t *self = &ctx->state.players[ctx->player_id - 1];
+                self->id = ctx->player_id;
+                strncpy(self->name, ctx->player_name, MAX_NAME_LEN);
+                self->name[MAX_NAME_LEN] = '\0';
+            }
 
             for (size_t i = 0; i < welcome.player_count; ++i) {
                 uint8_t id = welcome.players[i].id;
@@ -132,6 +145,15 @@ int client_handle_server_message(
             }
             break;
         }
+
+        case MSG_SET_READY:
+            if (header->sender_id >= 1 && header->sender_id <= MAX_PLAYERS) {
+                player_t *player = &ctx->state.players[header->sender_id - 1];
+                player->id = header->sender_id;
+                player->ready = true;
+                printf("[server] player %u is ready\n", header->sender_id);
+            }
+            break;
 
         case MSG_MAP: {
             msg_map_t map_msg;
