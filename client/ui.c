@@ -2,6 +2,7 @@
 
 #include <signal.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -12,6 +13,8 @@
 #define ESC_SET_CURSOR_ROW_COL_FS ASCII_ESC_STR "[%zu;%zuH"
 #define ESC_HIDE_CURSOR ASCII_ESC_STR "[?25l"
 #define ESC_SHOW_CURSOR ASCII_ESC_STR "[?25h"
+#define ESC_ENABLE_ALT_SCREEN_BUF ASCII_ESC_STR "[?1049h"
+#define ESC_DISABLE_ALT_SCREEN_BUF ASCII_ESC_STR "[?1049l"
 
 #define OUT_FD STDOUT_FILENO
 #define MAX_ROWS 512
@@ -27,66 +30,42 @@ size_t screen_cols = 128;
 /* screen buffer */
 char sb[MAX_ROWS][MAX_COLS];
 
-static int clear_screen(void) {
-    if (write(OUT_FD, ESC_CLEAR, CONST_STRLEN(ESC_CLEAR)) < 0) {
+char sb_flush_buf[MAX_ROWS * (MAX_COLS + 64) + 64];
+
+static int write_esc(const char *str, size_t len) {
+    if (write(OUT_FD, str, len) < 0) {
         perror("write");
         return -1;
     }
-
-    if (write(OUT_FD, ESC_SET_CURSOR_HOME, CONST_STRLEN(ESC_SET_CURSOR_HOME)) < 0) {
-        perror("write");
-        return -1;
-    }
-
     return 0;
 }
 
-static int hide_cursor(void) {
-    if (write(OUT_FD, ESC_HIDE_CURSOR, CONST_STRLEN(ESC_HIDE_CURSOR)) < 0) {
-        perror("write");
-        return -1;
-    }
-}
-
-static int show_cursor(void) {
-    if (write(OUT_FD, ESC_SHOW_CURSOR, CONST_STRLEN(ESC_SHOW_CURSOR)) < 0) {
-        perror("write");
-        return -1;
-    }
-}
-
-static int set_cursor(size_t row, size_t col) {
-    char buf[64];
-    int len = snprintf(buf, sizeof(buf), ESC_SET_CURSOR_ROW_COL_FS, row, col);
-
-    if (len < 0) {
-        perror("snprintf");
-        return -1;
-    }
-
-    if (write(OUT_FD, buf, len) < 0) {
-        perror("write");
-        return -1;
-    }
-
-    return 0;
-}
+#define WRITE_ESC(_str_lit) write_esc(_str_lit, CONST_STRLEN(_str_lit))
 
 static void sb_clear(void) {
-    for (size_t i = 0; i < sizeof(sb); i++) {
-        *((char *)sb + i) = ' ';
+    for (size_t y = 0; y < screen_rows; y++) {
+        for (size_t x = 0; x < screen_cols; x++) {
+            sb[y][x] = ' ';
+        }
     }
 }
 
 static void sb_flush(void) {
-    /* TODO */
+    size_t i = 0;
+    i += sprintf(sb_flush_buf + i, ESC_SET_CURSOR_ROW_COL_FS, (size_t)1, (size_t)1);
+    for (size_t y = 0; y < screen_rows; y++) {
+
+        memcpy(sb_flush_buf + i, sb[y], screen_cols);
+        i += screen_cols;
+
+        if (y != screen_rows - 1)
+            sb_flush_buf[i++] = '\n';
+    }
+
+    write(OUT_FD, sb_flush_buf, i);
 }
 
-/* TODO: redirect stderr */
-/* TODO: add logging function */
-/* TODO: log errors differently probably */
-/* TODO: log errors differently probably */
-/* TODO: handle more errors */
+/* TODO: logging: redirect stderr, add logging function, log errors differently probably */
 
 static int bound(int x, int bound_min, int bound_max) {
     if (x < bound_min)
@@ -112,10 +91,34 @@ static int update_screen_size(void) {
     return 0;
 }
 
+static void sigwinch_handler(int signum) {
+    if (signum != SIGWINCH)
+        return;
+
+    resized = true;
+}
+
+static int set_window_resize_signal_handler() {
+    struct sigaction sa;
+    sa.sa_handler = sigwinch_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGWINCH, &sa, NULL) < 0) {
+        perror("sigaction");
+        return -1;
+    }
+
+    return 0;
+}
+
 int client_ui_init(void) {
+    WRITE_ESC(ESC_ENABLE_ALT_SCREEN_BUF);
     update_screen_size();
-    clear_screen();
-    hide_cursor(); /* FIXME: is this even needed? */
+    WRITE_ESC(ESC_CLEAR);
+    WRITE_ESC(ESC_SET_CURSOR_HOME);
+    WRITE_ESC(ESC_HIDE_CURSOR); /* FIXME: is this even needed? */
+    set_window_resize_signal_handler();
 
     return 0;
 }
@@ -126,18 +129,18 @@ int client_ui_render_state_v2(const client_ctx_t *ctx) {
         resized = 0;
     }
 
-    clear_screen();
+    sb_clear();
 
-    /* FIXME: placeholder */
     for (size_t y = 0; y < screen_rows; y++) {
         for (size_t x = 0; x < screen_cols; x++) {
             if (y != 0 && y != screen_rows - 1 && x != 0 && x != screen_cols - 1)
                 continue;
 
-            set_cursor(y, x);
-            write(OUT_FD, "#", 1);
+            sb[y][x] = '#';
         }
     }
+
+    sb_flush();
 
     return 0;
 }
