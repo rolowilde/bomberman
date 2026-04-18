@@ -87,7 +87,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         msg_map_t map_msg;
         if (proto_decode_map_payload(&map_msg, payload, payload_len) == 0) {
             apply_map_payload(ctx, &map_msg);
-            client_render_state(ctx);
         }
         break;
     }
@@ -119,8 +118,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
                 player->alive = sync.players[i].alive;
                 player->ready = sync.players[i].ready;
             }
-
-            client_render_state(ctx);
         }
         break;
     }
@@ -134,7 +131,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             split_cell_index(moved.cell_index, ctx->state.map.cols, &row, &col);
             ctx->state.players[moved.player_id - 1].row = row;
             ctx->state.players[moved.player_id - 1].col = col;
-            client_render_state(ctx);
         }
         break;
     }
@@ -146,7 +142,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             uint16_t col;
             split_cell_index(bomb.cell_index, ctx->state.map.cols, &row, &col);
             gs_cell_set(&ctx->state, row, col, CELL_BOMB);
-            client_render_state(ctx);
         }
         break;
     }
@@ -166,7 +161,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             uint16_t col;
             split_cell_index(explosion.cell_index, ctx->state.map.cols, &row, &col);
             gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
-            client_render_state(ctx);
         }
         break;
     }
@@ -177,7 +171,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             death.player_id <= MAX_PLAYERS) {
             ctx->state.players[death.player_id - 1].alive = false;
             printf("[server] player %u died\n", death.player_id);
-            client_render_state(ctx);
         }
         break;
     }
@@ -195,7 +188,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             }
             split_cell_index(bonus.cell_index, ctx->state.map.cols, &row, &col);
             gs_cell_set(&ctx->state, row, col, cell);
-            client_render_state(ctx);
         }
         break;
     }
@@ -207,7 +199,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             uint16_t col;
             split_cell_index(bonus.cell_index, ctx->state.map.cols, &row, &col);
             gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
-            client_render_state(ctx);
         }
         break;
     }
@@ -219,7 +210,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             uint16_t col;
             split_cell_index(block.cell_index, ctx->state.map.cols, &row, &col);
             gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
-            client_render_state(ctx);
         }
         break;
     }
@@ -252,7 +242,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             ctx->state.players[slot].ready = false;
             ctx->state.players[slot].name[0] = '\0';
             printf("[server] player %u left\n", header->sender_id);
-            client_render_state(ctx);
         }
         break;
 

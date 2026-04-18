@@ -210,9 +210,10 @@ int main(int argc, char **argv) {
 
     client_ui_init();
 
-    printf("connected. commands: ready, w/a/s/d, b, ping, lobby, quit\n");
+    /* TODO: add client-facing logs and log it there (other client-facing messages too) */
+    fprintf(stderr, "connected. commands: ready, w/a/s/d, b, ping, lobby, quit\n");
 
-    client_ui_render_state_v2(&ctx);
+    client_ui_render(&ctx);
 
     while (ctx.running) {
         fd_set readfds;
@@ -245,7 +246,7 @@ int main(int argc, char **argv) {
             handle_fd_input(&ctx);
 
         if (ctx.running)
-            client_ui_render_state_v2(&ctx);
+            client_ui_render(&ctx);
     }
 
     client_ui_deinit();

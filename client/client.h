@@ -23,13 +23,9 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
 int client_build_command(client_ctx_t *ctx, const char *line, uint8_t *msg_type, uint8_t *sender_id, uint8_t *target_id,
                          uint8_t *payload, size_t payload_capacity, size_t *payload_len, bool *should_quit);
 
-/* TODO: remove */
-void client_render_state(const client_ctx_t *ctx);
-
 int client_ui_init(void);
 int client_ui_deinit(void);
 void client_ui_update_screen_size(void);
-/* TODO: rename */
-int client_ui_render_state_v2(const client_ctx_t *ctx);
+int client_ui_render(const client_ctx_t *ctx);
 
 #endif
