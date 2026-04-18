@@ -1,7 +1,11 @@
 #include "client.h"
+#include "sigthread.h"
 
 #include <arpa/inet.h>
+#include <errno.h>
 #include <netdb.h>
+#include <pthread.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -62,14 +66,7 @@ static int send_hello(client_ctx_t *ctx) {
         return -1;
     }
 
-    return sock_send_message(
-        ctx->fd,
-        MSG_HELLO,
-        SERVER_ENDPOINT_ID,
-        SERVER_ENDPOINT_ID,
-        payload,
-        payload_len
-    );
+    return sock_send_message(ctx->fd, MSG_HELLO, SERVER_ENDPOINT_ID, SERVER_ENDPOINT_ID, payload, payload_len);
 }
 
 static void apply_map_payload(client_ctx_t *ctx, const msg_map_t *map_msg) {
@@ -79,290 +76,307 @@ static void apply_map_payload(client_ctx_t *ctx, const msg_map_t *map_msg) {
     memcpy(ctx->state.map.cells, map_msg->cells, map_msg->cell_count);
 }
 
-int client_handle_server_message(
-    client_ctx_t *ctx,
-    const msg_header_t *header,
-    const uint8_t *payload,
-    size_t payload_len
-) {
+int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, const uint8_t *payload,
+                                 size_t payload_len) {
     if (ctx == NULL || header == NULL) {
         return -1;
     }
 
     switch (header->msg_type) {
-        case MSG_HELLO: {
-            msg_hello_t hello;
-            if (proto_decode_hello_payload(&hello, payload, payload_len) == 0) {
-                if (header->sender_id >= 1 && header->sender_id <= MAX_PLAYERS) {
-                    player_t *player = &ctx->state.players[header->sender_id - 1];
-                    player->id = header->sender_id;
-                    strncpy(player->name, hello.player_name, MAX_NAME_LEN);
-                    player->name[MAX_NAME_LEN] = '\0';
-                }
-                printf("[server] player joined: %s\n", hello.player_name);
-            }
-            break;
-        }
-
-        case MSG_WELCOME: {
-            msg_welcome_t welcome;
-            if (proto_decode_welcome_payload(&welcome, payload, payload_len) != 0) {
-                fprintf(stderr, "invalid WELCOME payload\n");
-                return -1;
-            }
-
-            ctx->player_id = header->sender_id;
-            ctx->has_welcome = true;
-            ctx->state.status = (game_status_t)welcome.game_status;
-
-            if (ctx->player_id >= 1 && ctx->player_id <= MAX_PLAYERS) {
-                player_t *self = &ctx->state.players[ctx->player_id - 1];
-                self->id = ctx->player_id;
-                strncpy(self->name, ctx->player_name, MAX_NAME_LEN);
-                self->name[MAX_NAME_LEN] = '\0';
-            }
-
-            for (size_t i = 0; i < welcome.player_count; ++i) {
-                uint8_t id = welcome.players[i].id;
-                if (id >= 1 && id <= MAX_PLAYERS) {
-                    player_t *player = &ctx->state.players[id - 1];
-                    player->id = id;
-                    player->ready = welcome.players[i].ready;
-                    strncpy(player->name, welcome.players[i].name, MAX_NAME_LEN);
-                    player->name[MAX_NAME_LEN] = '\0';
-                }
-            }
-
-            printf("[server] welcome, assigned id=%u status=%u\n", ctx->player_id, welcome.game_status);
-            break;
-        }
-
-        case MSG_SET_STATUS: {
-            msg_set_status_t status;
-            if (proto_decode_set_status_payload(&status, payload, payload_len) == 0) {
-                ctx->state.status = (game_status_t)status.status;
-                printf("[server] status changed to %u\n", status.status);
-            }
-            break;
-        }
-
-        case MSG_SET_READY:
+    case MSG_HELLO: {
+        msg_hello_t hello;
+        if (proto_decode_hello_payload(&hello, payload, payload_len) == 0) {
             if (header->sender_id >= 1 && header->sender_id <= MAX_PLAYERS) {
                 player_t *player = &ctx->state.players[header->sender_id - 1];
                 player->id = header->sender_id;
-                player->ready = true;
-                printf("[server] player %u is ready\n", header->sender_id);
+                strncpy(player->name, hello.player_name, MAX_NAME_LEN);
+                player->name[MAX_NAME_LEN] = '\0';
             }
-            break;
+            printf("[server] player joined: %s\n", hello.player_name);
+        }
+        break;
+    }
 
-        case MSG_MAP: {
-            msg_map_t map_msg;
-            if (proto_decode_map_payload(&map_msg, payload, payload_len) == 0) {
-                apply_map_payload(ctx, &map_msg);
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_WELCOME: {
+        msg_welcome_t welcome;
+        if (proto_decode_welcome_payload(&welcome, payload, payload_len) != 0) {
+            fprintf(stderr, "invalid WELCOME payload\n");
+            return -1;
         }
 
-        case MSG_SYNC_BOARD: {
-            msg_sync_board_t sync;
-            if (proto_decode_sync_board_payload(&sync, payload, payload_len) == 0) {
-                size_t i;
+        ctx->player_id = header->sender_id;
+        ctx->has_welcome = true;
+        ctx->state.status = (game_status_t)welcome.game_status;
 
-                ctx->state.status = (game_status_t)sync.status;
-                for (i = 0; i < MAX_PLAYERS; ++i) {
-                    ctx->state.players[i].alive = false;
-                    ctx->state.players[i].ready = false;
+        if (ctx->player_id >= 1 && ctx->player_id <= MAX_PLAYERS) {
+            player_t *self = &ctx->state.players[ctx->player_id - 1];
+            self->id = ctx->player_id;
+            strncpy(self->name, ctx->player_name, MAX_NAME_LEN);
+            self->name[MAX_NAME_LEN] = '\0';
+        }
+
+        for (size_t i = 0; i < welcome.player_count; ++i) {
+            uint8_t id = welcome.players[i].id;
+            if (id >= 1 && id <= MAX_PLAYERS) {
+                player_t *player = &ctx->state.players[id - 1];
+                player->id = id;
+                player->ready = welcome.players[i].ready;
+                strncpy(player->name, welcome.players[i].name, MAX_NAME_LEN);
+                player->name[MAX_NAME_LEN] = '\0';
+            }
+        }
+
+        printf("[server] welcome, assigned id=%u status=%u\n", ctx->player_id, welcome.game_status);
+        break;
+    }
+
+    case MSG_SET_STATUS: {
+        msg_set_status_t status;
+        if (proto_decode_set_status_payload(&status, payload, payload_len) == 0) {
+            ctx->state.status = (game_status_t)status.status;
+            printf("[server] status changed to %u\n", status.status);
+        }
+        break;
+    }
+
+    case MSG_SET_READY:
+        if (header->sender_id >= 1 && header->sender_id <= MAX_PLAYERS) {
+            player_t *player = &ctx->state.players[header->sender_id - 1];
+            player->id = header->sender_id;
+            player->ready = true;
+            printf("[server] player %u is ready\n", header->sender_id);
+        }
+        break;
+
+    case MSG_MAP: {
+        msg_map_t map_msg;
+        if (proto_decode_map_payload(&map_msg, payload, payload_len) == 0) {
+            apply_map_payload(ctx, &map_msg);
+            client_render_state(ctx);
+        }
+        break;
+    }
+
+    case MSG_SYNC_BOARD: {
+        msg_sync_board_t sync;
+        if (proto_decode_sync_board_payload(&sync, payload, payload_len) == 0) {
+            size_t i;
+
+            ctx->state.status = (game_status_t)sync.status;
+            for (i = 0; i < MAX_PLAYERS; ++i) {
+                ctx->state.players[i].alive = false;
+                ctx->state.players[i].ready = false;
+            }
+
+            for (i = 0; i < sync.player_count; ++i) {
+                uint8_t id = sync.players[i].id;
+                uint16_t row;
+                uint16_t col;
+                player_t *player;
+                if (id < 1 || id > MAX_PLAYERS || ctx->state.map.cols == 0) {
+                    continue;
                 }
-
-                for (i = 0; i < sync.player_count; ++i) {
-                    uint8_t id = sync.players[i].id;
-                    uint16_t row;
-                    uint16_t col;
-                    player_t *player;
-                    if (id < 1 || id > MAX_PLAYERS || ctx->state.map.cols == 0) {
-                        continue;
-                    }
-                    player = &ctx->state.players[id - 1];
-                    player->id = id;
-                    split_cell_index(sync.players[i].cell_index, ctx->state.map.cols, &row, &col);
-                    player->row = row;
-                    player->col = col;
-                    player->alive = sync.players[i].alive;
-                    player->ready = sync.players[i].ready;
-                }
-
-                client_render_state(ctx);
+                player = &ctx->state.players[id - 1];
+                player->id = id;
+                split_cell_index(sync.players[i].cell_index, ctx->state.map.cols, &row, &col);
+                player->row = row;
+                player->col = col;
+                player->alive = sync.players[i].alive;
+                player->ready = sync.players[i].ready;
             }
-            break;
+
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_MOVED: {
-            msg_moved_t moved;
-            if (proto_decode_moved_payload(&moved, payload, payload_len) == 0 &&
-                moved.player_id >= 1 && moved.player_id <= MAX_PLAYERS && ctx->state.map.cols > 0) {
-                uint16_t row;
-                uint16_t col;
-                split_cell_index(moved.cell_index, ctx->state.map.cols, &row, &col);
-                ctx->state.players[moved.player_id - 1].row = row;
-                ctx->state.players[moved.player_id - 1].col = col;
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_MOVED: {
+        msg_moved_t moved;
+        if (proto_decode_moved_payload(&moved, payload, payload_len) == 0 && moved.player_id >= 1 &&
+            moved.player_id <= MAX_PLAYERS && ctx->state.map.cols > 0) {
+            uint16_t row;
+            uint16_t col;
+            split_cell_index(moved.cell_index, ctx->state.map.cols, &row, &col);
+            ctx->state.players[moved.player_id - 1].row = row;
+            ctx->state.players[moved.player_id - 1].col = col;
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_BOMB: {
-            msg_bomb_t bomb;
-            if (proto_decode_bomb_payload(&bomb, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
-                uint16_t row;
-                uint16_t col;
-                split_cell_index(bomb.cell_index, ctx->state.map.cols, &row, &col);
-                gs_cell_set(&ctx->state, row, col, CELL_BOMB);
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_BOMB: {
+        msg_bomb_t bomb;
+        if (proto_decode_bomb_payload(&bomb, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
+            uint16_t row;
+            uint16_t col;
+            split_cell_index(bomb.cell_index, ctx->state.map.cols, &row, &col);
+            gs_cell_set(&ctx->state, row, col, CELL_BOMB);
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_EXPLOSION_START: {
-            msg_explosion_start_t explosion;
-            if (proto_decode_explosion_start_payload(&explosion, payload, payload_len) == 0) {
-                printf("[server] explosion start at cell=%u radius=%u\n", explosion.cell_index, explosion.radius);
-            }
-            break;
+    case MSG_EXPLOSION_START: {
+        msg_explosion_start_t explosion;
+        if (proto_decode_explosion_start_payload(&explosion, payload, payload_len) == 0) {
+            printf("[server] explosion start at cell=%u radius=%u\n", explosion.cell_index, explosion.radius);
         }
+        break;
+    }
 
-        case MSG_EXPLOSION_END: {
-            msg_explosion_end_t explosion;
-            if (proto_decode_explosion_end_payload(&explosion, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
-                uint16_t row;
-                uint16_t col;
-                split_cell_index(explosion.cell_index, ctx->state.map.cols, &row, &col);
-                gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_EXPLOSION_END: {
+        msg_explosion_end_t explosion;
+        if (proto_decode_explosion_end_payload(&explosion, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
+            uint16_t row;
+            uint16_t col;
+            split_cell_index(explosion.cell_index, ctx->state.map.cols, &row, &col);
+            gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_DEATH: {
-            msg_death_t death;
-            if (proto_decode_death_payload(&death, payload, payload_len) == 0 && death.player_id >= 1 && death.player_id <= MAX_PLAYERS) {
-                ctx->state.players[death.player_id - 1].alive = false;
-                printf("[server] player %u died\n", death.player_id);
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_DEATH: {
+        msg_death_t death;
+        if (proto_decode_death_payload(&death, payload, payload_len) == 0 && death.player_id >= 1 &&
+            death.player_id <= MAX_PLAYERS) {
+            ctx->state.players[death.player_id - 1].alive = false;
+            printf("[server] player %u died\n", death.player_id);
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_BONUS_AVAILABLE: {
-            msg_bonus_available_t bonus;
-            if (proto_decode_bonus_available_payload(&bonus, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
-                uint16_t row;
-                uint16_t col;
-                uint8_t cell = CELL_BONUS_SPEED;
-                if (bonus.bonus_type == BONUS_RADIUS) {
-                    cell = CELL_BONUS_RADIUS;
-                } else if (bonus.bonus_type == BONUS_TIMER) {
-                    cell = CELL_BONUS_TIMER;
-                }
-                split_cell_index(bonus.cell_index, ctx->state.map.cols, &row, &col);
-                gs_cell_set(&ctx->state, row, col, cell);
-                client_render_state(ctx);
+    case MSG_BONUS_AVAILABLE: {
+        msg_bonus_available_t bonus;
+        if (proto_decode_bonus_available_payload(&bonus, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
+            uint16_t row;
+            uint16_t col;
+            uint8_t cell = CELL_BONUS_SPEED;
+            if (bonus.bonus_type == BONUS_RADIUS) {
+                cell = CELL_BONUS_RADIUS;
+            } else if (bonus.bonus_type == BONUS_TIMER) {
+                cell = CELL_BONUS_TIMER;
             }
-            break;
+            split_cell_index(bonus.cell_index, ctx->state.map.cols, &row, &col);
+            gs_cell_set(&ctx->state, row, col, cell);
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_BONUS_RETRIEVED: {
-            msg_bonus_retrieved_t bonus;
-            if (proto_decode_bonus_retrieved_payload(&bonus, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
-                uint16_t row;
-                uint16_t col;
-                split_cell_index(bonus.cell_index, ctx->state.map.cols, &row, &col);
-                gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_BONUS_RETRIEVED: {
+        msg_bonus_retrieved_t bonus;
+        if (proto_decode_bonus_retrieved_payload(&bonus, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
+            uint16_t row;
+            uint16_t col;
+            split_cell_index(bonus.cell_index, ctx->state.map.cols, &row, &col);
+            gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_BLOCK_DESTROYED: {
-            msg_block_destroyed_t block;
-            if (proto_decode_block_destroyed_payload(&block, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
-                uint16_t row;
-                uint16_t col;
-                split_cell_index(block.cell_index, ctx->state.map.cols, &row, &col);
-                gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_BLOCK_DESTROYED: {
+        msg_block_destroyed_t block;
+        if (proto_decode_block_destroyed_payload(&block, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
+            uint16_t row;
+            uint16_t col;
+            split_cell_index(block.cell_index, ctx->state.map.cols, &row, &col);
+            gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
+            client_render_state(ctx);
         }
+        break;
+    }
 
-        case MSG_WINNER: {
-            msg_winner_t winner;
-            if (proto_decode_winner_payload(&winner, payload, payload_len) == 0) {
-                printf("[server] winner is player %u\n", winner.winner_id);
-            }
-            break;
+    case MSG_WINNER: {
+        msg_winner_t winner;
+        if (proto_decode_winner_payload(&winner, payload, payload_len) == 0) {
+            printf("[server] winner is player %u\n", winner.winner_id);
         }
+        break;
+    }
 
-        case MSG_ERROR: {
-            msg_error_t err;
-            if (proto_decode_error_payload(&err, payload, payload_len) == 0) {
-                printf("[server][error] %s\n", err.text);
-            }
-            break;
+    case MSG_ERROR: {
+        msg_error_t err;
+        if (proto_decode_error_payload(&err, payload, payload_len) == 0) {
+            printf("[server][error] %s\n", err.text);
         }
+        break;
+    }
 
-        case MSG_DISCONNECT:
-            printf("[server] disconnect requested\n");
-            ctx->running = false;
-            return 1;
+    case MSG_DISCONNECT:
+        printf("[server] disconnect requested\n");
+        ctx->running = false;
+        return 1;
 
-        case MSG_LEAVE:
-            if (header->sender_id >= 1 && header->sender_id <= MAX_PLAYERS) {
-                size_t slot = (size_t)(header->sender_id - 1);
-                ctx->state.players[slot].alive = false;
-                ctx->state.players[slot].ready = false;
-                ctx->state.players[slot].name[0] = '\0';
-                printf("[server] player %u left\n", header->sender_id);
-                client_render_state(ctx);
-            }
-            break;
+    case MSG_LEAVE:
+        if (header->sender_id >= 1 && header->sender_id <= MAX_PLAYERS) {
+            size_t slot = (size_t)(header->sender_id - 1);
+            ctx->state.players[slot].alive = false;
+            ctx->state.players[slot].ready = false;
+            ctx->state.players[slot].name[0] = '\0';
+            printf("[server] player %u left\n", header->sender_id);
+            client_render_state(ctx);
+        }
+        break;
 
-        case MSG_PING:
-            sock_send_message(ctx->fd, MSG_PONG, ctx->player_id, SERVER_ENDPOINT_ID, NULL, 0);
-            break;
+    case MSG_PING:
+        sock_send_message(ctx->fd, MSG_PONG, ctx->player_id, SERVER_ENDPOINT_ID, NULL, 0);
+        break;
 
-        case MSG_PONG:
-            printf("[server] pong\n");
-            break;
+    case MSG_PONG:
+        printf("[server] pong\n");
+        break;
 
-        default:
-            printf("[server] unhandled message type=%u\n", header->msg_type);
-            break;
+    default:
+        printf("[server] unhandled message type=%u\n", header->msg_type);
+        break;
+    }
+
+    return 0;
+}
+
+/* must be called before creating any other threads */
+int init_signals(pthread_t *tid) {
+    static sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGWINCH);
+    sigaddset(&set, SIGINT);
+
+    /* make signals from the set be handled by sigwait in the signal thread */
+    if (pthread_sigmask(SIG_BLOCK, &set, NULL) != 0) {
+        perror("pthread_sigmask");
+        return 1;
+    }
+
+    st_pipe_init();
+
+    if (0 != pthread_create(tid, NULL, signal_thread, &set)) {
+        perror("pthread_create");
+        return 1;
     }
 
     return 0;
 }
 
 int main(int argc, char **argv) {
-    /* FIXME: placeholder start */
-    client_ui_init();
-    while (1)
-    {
-        client_ui_render_state_v2(NULL);
-    }
-    
-    getc(stdin);
-
-    return 0;
-    /* FIXME: placeholder end */
-
     client_ctx_t ctx;
+    pthread_t signal_tid;
     long port;
 
     if (argc < 4) {
         fprintf(stderr, "usage: %s <host> <port> <name>\n", argv[0]);
         return 1;
     }
+
+    freopen("/tmp/bomberman.log", "a", stderr);
+    fprintf(stderr, "Starting...\n");
+
+    if (init_signals(&signal_tid) != 0)
+        return 1;
+
+    client_ui_init();
 
     port = strtol(argv[2], NULL, 10);
     if (port <= 0 || port > 65535) {
@@ -396,10 +410,14 @@ int main(int argc, char **argv) {
         fd_set readfds;
         int max_fd = ctx.fd;
         int rv;
+        bool need_redraw = true;
+        int sig_pipe_fd = st_pipe_read_fd();
 
         FD_ZERO(&readfds);
         FD_SET(ctx.fd, &readfds);
         FD_SET(STDIN_FILENO, &readfds);
+        FD_SET(sig_pipe_fd, &readfds);
+
         if (STDIN_FILENO > max_fd) {
             max_fd = STDIN_FILENO;
         }
@@ -408,6 +426,24 @@ int main(int argc, char **argv) {
         if (rv < 0) {
             perror("select");
             break;
+        }
+
+        if (FD_ISSET(sig_pipe_fd, &readfds)) {
+            int sig;
+            int n;
+
+            while ((n = read(sig_pipe_fd, &sig, sizeof(int))) == sizeof(int)) {
+                if (sig == SIGWINCH) {
+                    client_ui_update_screen_size();
+                    need_redraw = true;
+                } else if (sig == SIGINT) {
+                    ctx.running = false;
+                }
+            }
+
+            if (n == -1 && errno != EAGAIN) {
+                perror("read");
+            }
         }
 
         if (FD_ISSET(ctx.fd, &readfds)) {
@@ -442,17 +478,8 @@ int main(int argc, char **argv) {
                 break;
             }
 
-            command_status = client_build_command(
-                &ctx,
-                line,
-                &msg_type,
-                &sender_id,
-                &target_id,
-                payload,
-                sizeof(payload),
-                &payload_len,
-                &should_quit
-            );
+            command_status = client_build_command(&ctx, line, &msg_type, &sender_id, &target_id, payload,
+                                                  sizeof(payload), &payload_len, &should_quit);
 
             if (command_status == 0) {
                 if (sock_send_message(ctx.fd, msg_type, sender_id, target_id, payload, payload_len) != 0) {
@@ -466,9 +493,14 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "command encoding failed\n");
             }
         }
+
+        if (need_redraw)
+            client_ui_render_state_v2(&ctx);
     }
 
+    client_ui_deinit();
     close(ctx.fd);
     gs_free(&ctx.state);
+
     return 0;
 }

@@ -22,20 +22,20 @@
 
 #define CONST_STRLEN(s) (sizeof(s) - 1)
 
-volatile sig_atomic_t resized = 0;
+static bool screen_resized = false;
 
-size_t screen_rows = 128;
-size_t screen_cols = 128;
+static size_t screen_rows = 128;
+static size_t screen_cols = 128;
 
 /* screen buffer */
-char sb[MAX_ROWS][MAX_COLS];
+static char sb[MAX_ROWS][MAX_COLS];
 
-char sb_flush_buf[MAX_ROWS * (MAX_COLS + 64) + 64];
+static char sb_flush_buf[MAX_ROWS * (MAX_COLS + 64) + 64];
 
 static int write_esc(const char *str, size_t len) {
     if (write(OUT_FD, str, len) < 0) {
         perror("write");
-        return -1;
+        return 1;
     }
     return 0;
 }
@@ -66,6 +66,7 @@ static void sb_flush(void) {
 }
 
 /* TODO: logging: redirect stderr, add logging function, log errors differently probably */
+/* TODO: clear screen on SIGINT/exit */
 
 static int bound(int x, int bound_min, int bound_max) {
     if (x < bound_min)
@@ -82,7 +83,7 @@ static int update_screen_size(void) {
     struct winsize ws;
     if (ioctl(OUT_FD, TIOCGWINSZ, &ws) < 0) {
         perror("ioctl");
-        return -1;
+        return 1;
     }
 
     screen_rows = bound(ws.ws_row, 0, MAX_ROWS);
@@ -91,42 +92,31 @@ static int update_screen_size(void) {
     return 0;
 }
 
-static void sigwinch_handler(int signum) {
-    if (signum != SIGWINCH)
-        return;
-
-    resized = true;
-}
-
-static int set_window_resize_signal_handler() {
-    struct sigaction sa;
-    sa.sa_handler = sigwinch_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-
-    if (sigaction(SIGWINCH, &sa, NULL) < 0) {
-        perror("sigaction");
-        return -1;
-    }
-
-    return 0;
-}
-
 int client_ui_init(void) {
-    WRITE_ESC(ESC_ENABLE_ALT_SCREEN_BUF);
-    update_screen_size();
-    WRITE_ESC(ESC_CLEAR);
-    WRITE_ESC(ESC_SET_CURSOR_HOME);
-    WRITE_ESC(ESC_HIDE_CURSOR); /* FIXME: is this even needed? */
-    set_window_resize_signal_handler();
+    int ret = 0;
+    ret |= WRITE_ESC(ESC_ENABLE_ALT_SCREEN_BUF);
+    ret |= WRITE_ESC(ESC_HIDE_CURSOR);
+    ret |= update_screen_size();
 
-    return 0;
+    return ret;
+}
+
+int client_ui_deinit(void) {
+    int ret = 0;
+    ret |= WRITE_ESC(ESC_DISABLE_ALT_SCREEN_BUF);
+    ret |= WRITE_ESC(ESC_SHOW_CURSOR);
+
+    return ret;
+}
+
+void client_ui_update_screen_size(void) {
+    screen_resized = true;
 }
 
 int client_ui_render_state_v2(const client_ctx_t *ctx) {
-    if (resized) {
+    if (screen_resized) {
         update_screen_size();
-        resized = 0;
+        screen_resized = false;
     }
 
     sb_clear();

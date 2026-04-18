@@ -39,7 +39,9 @@ int client_build_command(
 /* TODO: remove */
 void client_render_state(const client_ctx_t *ctx);
 
-int client_ui_init();
+int client_ui_init(void);
+int client_ui_deinit(void);
+void client_ui_update_screen_size(void);
 /* TODO: rename */
 int client_ui_render_state_v2(const client_ctx_t *ctx);
 

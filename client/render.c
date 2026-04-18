@@ -14,6 +14,9 @@ static char status_char(game_status_t status) {
 }
 
 void client_render_state(const client_ctx_t *ctx) {
+    /* FIXME: placeholder */
+    return;
+
     uint16_t rows;
     uint16_t cols;
     char *grid;
