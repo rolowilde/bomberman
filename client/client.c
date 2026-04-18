@@ -95,21 +95,17 @@ static int init_signals(pthread_t *tid) {
 static void handle_fd_sigthread(client_ctx_t *ctx, int sig_pipe_fd) {
     int sig;
     int n;
-    int need_update_screen_size = false;
 
     while ((n = read(sig_pipe_fd, &sig, sizeof(int))) == sizeof(int)) {
         if (sig == SIGWINCH) {
-            need_update_screen_size = true;
+            client_ui_update_screen_size();
         } else if (sig == SIGINT) {
             ctx->running = false;
         }
     }
 
     if (n == -1 && errno != EAGAIN)
-        perror("read");
-
-    if (need_update_screen_size)
-        client_ui_update_screen_size();
+        perror("read");        
 }
 
 static void handle_fd_server(client_ctx_t *ctx) {
