@@ -65,8 +65,7 @@ static void sb_flush(void) {
     write(OUT_FD, sb_flush_buf, i);
 }
 
-/* TODO: logging: redirect stderr, add logging function, log errors differently probably */
-/* TODO: clear screen on SIGINT/exit */
+/* TODO: logging: add logging function to use instead of perror/fprintf */
 
 static int bound(int x, int bound_min, int bound_max) {
     if (x < bound_min)
