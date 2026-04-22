@@ -14,10 +14,14 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include "../common/include/serialization.h"
 #include "../common/include/socket_io.h"
+
+pthread_t signal_tid;
+struct termios orig_termios;
 
 static int connect_to_server(const char *host, uint16_t port) {
     struct addrinfo hints;
@@ -105,7 +109,7 @@ static void handle_fd_sigthread(client_ctx_t *ctx, int sig_pipe_fd) {
     }
 
     if (n == -1 && errno != EAGAIN)
-        perror("read");        
+        perror("read");
 }
 
 static void handle_fd_server(client_ctx_t *ctx) {
@@ -132,43 +136,62 @@ fail:
 }
 
 static void handle_fd_input(client_ctx_t *ctx) {
-    char line[128];
     uint8_t msg_type;
     uint8_t sender_id;
     uint8_t target_id;
     uint8_t payload[64];
     size_t payload_len = 0;
     bool should_quit = false;
-    int command_status;
+    client_build_command_err_t build_command_ret;
+    char c;
 
-    if (fgets(line, sizeof(line), stdin) == NULL) {
-        goto fail;
+    if (read(STDIN_FILENO, &c, 1) < 0) {
+        perror("read");
+        return;
     }
 
-    command_status = client_build_command(ctx, line, &msg_type, &sender_id, &target_id, payload, sizeof(payload),
-                                          &payload_len, &should_quit);
+    build_command_ret = client_build_command(ctx, c, &msg_type, &sender_id, &target_id, payload, sizeof(payload),
+                                             &payload_len, &should_quit);
 
-    if (command_status == 0) {
-        if (sock_send_message(ctx->fd, msg_type, sender_id, target_id, payload, payload_len) != 0) {
-            fprintf(stderr, "failed to send command\n");
-            goto fail;
-        }
-        if (should_quit) {
-            goto fail;
-        }
-    } else if (command_status < 0) {
+    if (build_command_ret == CLIENT_BUILD_COMMAND_ERR_FAIL) {
         fprintf(stderr, "command encoding failed\n");
+        ctx->running = false;
+        return;
     }
 
-    return;
-fail:
-    ctx->running = false;
-    return;
+    if (build_command_ret != CLIENT_BUILD_COMMAND_ERR_OK)
+        return;
+
+    if (sock_send_message(ctx->fd, msg_type, sender_id, target_id, payload, payload_len) != 0) {
+        fprintf(stderr, "failed to send command\n");
+        ctx->running = false;
+        return;
+    }
+
+    if (should_quit) {
+        ctx->running = false;
+    }
+}
+
+static void restore_orig_input_mode() {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+}
+
+static void enable_raw_input_mode() {
+    tcgetattr(STDIN_FILENO, &orig_termios);
+
+    struct termios raw = orig_termios;
+
+    raw.c_lflag &= ~(ECHO | ICANON); // no echo, no line buffering
+    raw.c_iflag &= ~(IXON | ICRNL);  // disable ctrl-s/q and CR->NL
+    raw.c_cc[VMIN] = 1;              // read returns after 1 byte
+    raw.c_cc[VTIME] = 0;
+
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
 int main(int argc, char **argv) {
     client_ctx_t ctx;
-    pthread_t signal_tid;
     long port;
 
     if (argc < 4) {
@@ -209,9 +232,9 @@ int main(int argc, char **argv) {
     }
 
     client_ui_init();
+    enable_raw_input_mode();
 
-    /* TODO: add client-facing logs and log it there (other client-facing messages too) */
-    fprintf(stderr, "connected. commands: ready, w/a/s/d, b, ping, lobby, quit\n");
+    /* TODO: maybe add client-facing logs  */
 
     client_ui_render(&ctx);
 
@@ -249,6 +272,9 @@ int main(int argc, char **argv) {
             client_ui_render(&ctx);
     }
 
+    /* TODO: send MSG_LEAVE */
+
+    restore_orig_input_mode();
     client_ui_deinit();
     close(ctx.fd);
     gs_free(&ctx.state);

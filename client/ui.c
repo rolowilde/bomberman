@@ -108,7 +108,7 @@ __attribute__((format(printf, 3, 4))) static void draw_text_line_format(size_t r
 static void draw_screen_lobby(const client_ctx_t *ctx __attribute__((unused))) {
     /* FIXME: placeholder, should be redone */
     draw_text_line_format(5, 10, "LOBBY");
-    draw_text_line_format(6, 10, "commands: ready, w/a/s/d, b, ping, lobby, quit");
+    draw_text_line_format(6, 10, CONTROLS_STR);
 }
 
 static char status_char(game_status_t status) {
@@ -174,12 +174,17 @@ static void draw_screen_game(const client_ctx_t *ctx) {
         if (player->id == 0) {
             continue;
         }
-        draw_text_line_format(rows + 7 + i, 7, "id=%u alive=%d ready=%d pos=(%u,%u) bombs=%u radius=%u timer=%u speed=%u name=%s", player->id,
-               player->alive ? 1 : 0, player->ready ? 1 : 0, player->row, player->col, player->bomb_count,
-               player->bomb_radius, player->bomb_timer_ticks, player->speed, player->name);
+        draw_text_line_format(
+            rows + 7 + i, 7, "id=%u alive=%d ready=%d pos=(%u,%u) bombs=%u radius=%u timer=%u speed=%u name=%s",
+            player->id, player->alive ? 1 : 0, player->ready ? 1 : 0, player->row, player->col, player->bomb_count,
+            player->bomb_radius, player->bomb_timer_ticks, player->speed, player->name);
     }
 
     free(grid);
+}
+
+static void draw_screen_game_over(const client_ctx_t *ctx __attribute__((unused))) {
+    draw_text_line_format(5, 5, "GAME OVER");
 }
 
 int client_ui_init(void) {
@@ -219,8 +224,7 @@ int client_ui_render(const client_ctx_t *ctx) {
         draw_screen_game(ctx);
         break;
     case GAME_END:
-        /* FIXME: placeholder */
-        draw_text_line_format(5, 5, "GAME END");
+        draw_screen_game_over(ctx);
         break;
     }
 

@@ -6,49 +6,40 @@
 
 #include "../common/include/serialization.h"
 
-int client_build_command(
-    client_ctx_t *ctx,
-    const char *line,
-    uint8_t *msg_type,
-    uint8_t *sender_id,
-    uint8_t *target_id,
-    uint8_t *payload,
-    size_t payload_capacity,
-    size_t *payload_len,
-    bool *should_quit
-) {
-    char command[64];
-
-    if (ctx == NULL || line == NULL || msg_type == NULL || sender_id == NULL ||
-        target_id == NULL || payload == NULL || payload_len == NULL || should_quit == NULL) {
-        return -1;
+client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uint8_t *msg_type, uint8_t *sender_id,
+                                                uint8_t *target_id, uint8_t *payload, size_t payload_capacity,
+                                                size_t *payload_len, bool *should_quit) {
+    if (ctx == NULL || msg_type == NULL || sender_id == NULL || target_id == NULL || payload == NULL ||
+        payload_len == NULL || should_quit == NULL) {
+        return CLIENT_BUILD_COMMAND_ERR_FAIL;
     }
-
-    memset(command, 0, sizeof(command));
-    if (sscanf(line, "%63s", command) != 1) {
-        return 1;
-    }
-
-    command[0] = (char)tolower((unsigned char)command[0]);
 
     *sender_id = ctx->has_welcome ? ctx->player_id : SERVER_ENDPOINT_ID;
     *target_id = SERVER_ENDPOINT_ID;
     *payload_len = 0;
     *should_quit = false;
 
-    if (strcmp(command, "ready") == 0) {
+    /* ready */
+    if (cmd == 'r') {
+        if (ctx->state.status != GAME_LOBBY)
+            return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+
         *msg_type = MSG_SET_READY;
-        return 0;
+        return CLIENT_BUILD_COMMAND_ERR_OK;
     }
 
-    if (strcmp(command, "w") == 0 || strcmp(command, "a") == 0 || strcmp(command, "s") == 0 || strcmp(command, "d") == 0) {
+    /* wasd */
+    if (cmd == 'w' || cmd == 'a' || cmd == 's' || cmd == 'd') {
         msg_move_attempt_t move;
 
-        if (strcmp(command, "w") == 0) {
+        if (ctx->state.status != GAME_RUNNING)
+            return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+
+        if (cmd == 'w') {
             move.direction = DIR_UP;
-        } else if (strcmp(command, "s") == 0) {
+        } else if (cmd == 's') {
             move.direction = DIR_DOWN;
-        } else if (strcmp(command, "a") == 0) {
+        } else if (cmd == 'a') {
             move.direction = DIR_LEFT;
         } else {
             move.direction = DIR_RIGHT;
@@ -56,64 +47,74 @@ int client_build_command(
 
         *msg_type = MSG_MOVE_ATTEMPT;
         if (proto_encode_move_attempt_payload(&move, payload, payload_capacity, payload_len) != 0) {
-            return -1;
+            return CLIENT_BUILD_COMMAND_ERR_FAIL;
         }
-        return 0;
+        return CLIENT_BUILD_COMMAND_ERR_OK;
     }
 
-    if (strcmp(command, "b") == 0) {
+    /* bomb */
+    if (cmd == 'b') {
         msg_bomb_attempt_t bomb;
         int slot;
 
         if (!ctx->has_welcome) {
-            return 1;
+            return CLIENT_BUILD_COMMAND_ERR_FAIL;
         }
+
+        if (ctx->state.status != GAME_RUNNING)
+            return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
 
         slot = gs_find_player_slot_by_id(&ctx->state, ctx->player_id);
         if (slot < 0) {
-            return 1;
+            return CLIENT_BUILD_COMMAND_ERR_FAIL;
         }
 
-        bomb.cell_index = make_cell_index(
-            ctx->state.players[slot].row,
-            ctx->state.players[slot].col,
-            ctx->state.map.cols
-        );
+        bomb.cell_index =
+            make_cell_index(ctx->state.players[slot].row, ctx->state.players[slot].col, ctx->state.map.cols);
 
         *msg_type = MSG_BOMB_ATTEMPT;
         if (proto_encode_bomb_attempt_payload(&bomb, payload, payload_capacity, payload_len) != 0) {
-            return -1;
+            return CLIENT_BUILD_COMMAND_ERR_FAIL;
         }
-        return 0;
+        return CLIENT_BUILD_COMMAND_ERR_OK;
     }
 
-    if (strcmp(command, "lobby") == 0) {
+    /* lobby */
+    if (cmd == 'l') {
         msg_set_status_t status;
+
+        if (ctx->state.status == GAME_LOBBY)
+            return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
 
         status.status = GAME_LOBBY;
         *msg_type = MSG_SET_STATUS;
         if (proto_encode_set_status_payload(&status, payload, payload_capacity, payload_len) != 0) {
-            return -1;
+            return CLIENT_BUILD_COMMAND_ERR_FAIL;
         }
-        return 0;
+        return CLIENT_BUILD_COMMAND_ERR_OK;
     }
 
-    if (strcmp(command, "ping") == 0) {
+    /* ping */
+    if (cmd == 'p') {
         *msg_type = MSG_PING;
-        return 0;
+        return CLIENT_BUILD_COMMAND_ERR_OK;
     }
 
-    if (strcmp(command, "quit") == 0) {
+    /* quit */
+    /* TODO: send MSG_LEAVE in main() after the main loop instead and return CLIENT_BUILD_COMMAND_ERR_NO_COMMAND here */
+    if (cmd == 'q') {
         *msg_type = MSG_LEAVE;
         *should_quit = true;
-        return 0;
+        return CLIENT_BUILD_COMMAND_ERR_OK;
     }
 
-    if (strcmp(command, "help") == 0) {
-        printf("commands: ready, w/a/s/d, b, ping, lobby, quit\n");
-        return 1;
+    /* help */
+    /* TODO: either remove this or change the behavior: maybe make a permanent help message the visibility of which can
+     * be toggled with this (or just send  msg to clien-facing logs) */
+    if (cmd == 'h') {
+        printf(CONTROLS_STR "\n");
+        return CLIENT_BUILD_COMMAND_ERR_NO_COMMAND;
     }
 
-    printf("unknown command. list command with 'help'.\n");
-    return 1;
+    return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
 }
