@@ -101,6 +101,10 @@ typedef struct {
     uint16_t cell_index;
     bool alive;
     bool ready;
+    uint8_t bomb_count;
+    uint8_t bomb_radius;
+    uint16_t bomb_timer_ticks;
+    uint16_t speed;
 } msg_sync_player_t;
 
 typedef struct {

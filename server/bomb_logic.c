@@ -165,4 +165,6 @@ void server_process_bomb_explosion(server_ctx_t *ctx, size_t bomb_index) {
     if (proto_encode_explosion_end_payload(&end_msg, payload, sizeof(payload), &payload_len) == 0) {
         server_broadcast(ctx, MSG_EXPLOSION_END, SERVER_ENDPOINT_ID, payload, payload_len, -1);
     }
+
+    server_send_sync_to_all(ctx);
 }

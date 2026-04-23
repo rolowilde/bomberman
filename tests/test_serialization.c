@@ -91,11 +91,19 @@ static void test_sync_roundtrip(void) {
     in.players[0].cell_index = 4;
     in.players[0].alive = true;
     in.players[0].ready = true;
+    in.players[0].bomb_count = 1;
+    in.players[0].bomb_radius = 2;
+    in.players[0].bomb_timer_ticks = 60;
+    in.players[0].speed = 3;
 
     in.players[1].id = 2;
     in.players[1].cell_index = 7;
     in.players[1].alive = false;
     in.players[1].ready = true;
+    in.players[1].bomb_count = 0;
+    in.players[1].bomb_radius = 1;
+    in.players[1].bomb_timer_ticks = 45;
+    in.players[1].speed = 4;
 
     assert(proto_encode_sync_board_payload(&in, payload, sizeof(payload), &payload_len) == 0);
     assert(proto_decode_sync_board_payload(&out, payload, payload_len) == 0);
@@ -104,6 +112,9 @@ static void test_sync_roundtrip(void) {
     assert(out.player_count == 2);
     assert(out.players[0].alive == true);
     assert(out.players[1].cell_index == 7);
+    assert(out.players[0].bomb_radius == 2);
+    assert(out.players[0].bomb_timer_ticks == 60);
+    assert(out.players[1].speed == 4);
 }
 
 int main(void) {

@@ -117,6 +117,10 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
                 player->col = col;
                 player->alive = sync.players[i].alive;
                 player->ready = sync.players[i].ready;
+                player->bomb_count = sync.players[i].bomb_count;
+                player->bomb_radius = sync.players[i].bomb_radius;
+                player->bomb_timer_ticks = sync.players[i].bomb_timer_ticks;
+                player->speed = sync.players[i].speed;
             }
         }
         break;

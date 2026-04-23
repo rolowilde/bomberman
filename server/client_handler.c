@@ -64,6 +64,10 @@ void server_send_sync_to_all(server_ctx_t *ctx) {
             make_cell_index(ctx->state.players[i].row, ctx->state.players[i].col, ctx->state.map.cols);
         sync.players[sync.player_count].alive = ctx->state.players[i].alive;
         sync.players[sync.player_count].ready = ctx->state.players[i].ready;
+        sync.players[sync.player_count].bomb_count = ctx->state.players[i].bomb_count;
+        sync.players[sync.player_count].bomb_radius = ctx->state.players[i].bomb_radius;
+        sync.players[sync.player_count].bomb_timer_ticks = ctx->state.players[i].bomb_timer_ticks;
+        sync.players[sync.player_count].speed = ctx->state.players[i].speed;
         sync.player_count++;
     }
 
@@ -291,6 +295,8 @@ static int handle_move_attempt(server_ctx_t *ctx, server_client_t *client, const
         if (proto_encode_bonus_retrieved_payload(&bonus_msg, bonus_payload, sizeof(bonus_payload), &bonus_payload_len) == 0) {
             server_broadcast(ctx, MSG_BONUS_RETRIEVED, client->id, bonus_payload, bonus_payload_len, -1);
         }
+
+        server_send_sync_to_all(ctx);
     }
 
     return 0;
@@ -358,6 +364,8 @@ static int handle_bomb_attempt(server_ctx_t *ctx, server_client_t *client, const
     if (proto_encode_bomb_payload(&bomb_msg, bomb_payload, sizeof(bomb_payload), &bomb_payload_len) == 0) {
         server_broadcast(ctx, MSG_BOMB, client->id, bomb_payload, bomb_payload_len, -1);
     }
+
+    server_send_sync_to_all(ctx);
 
     return 0;
 }
