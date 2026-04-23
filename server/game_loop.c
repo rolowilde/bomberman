@@ -9,6 +9,7 @@ static void maybe_finish_round(server_ctx_t *ctx) {
     size_t i;
     size_t alive_count = 0;
     uint8_t winner_id = 0;
+    const char *winner_name = NULL;
 
     if (ctx->state.status != GAME_RUNNING) {
         return;
@@ -20,6 +21,7 @@ static void maybe_finish_round(server_ctx_t *ctx) {
         if (client->active && player->alive) {
             alive_count++;
             winner_id = player->id;
+            winner_name = player->name;
         }
     }
 
@@ -35,6 +37,12 @@ static void maybe_finish_round(server_ctx_t *ctx) {
             if (proto_encode_winner_payload(&winner, payload, sizeof(payload), &payload_len) == 0) {
                 server_broadcast(ctx, MSG_WINNER, SERVER_ENDPOINT_ID, payload, payload_len, -1);
             }
+
+            fprintf(stdout, "winner id=%u", winner_id);
+            if (winner_name != NULL && strlen(winner_name) > 0) {
+                fprintf(stdout, " name=%s", winner_name);
+            }
+            fprintf(stdout, "\n");
         }
 
         fprintf(stdout, "round finished\n");
