@@ -62,8 +62,10 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
 
     /* ready */
     if (cmd == 'r') {
-        if (ctx->state.status != GAME_LOBBY)
+        if (ctx->state.status != GAME_LOBBY) {
+            qlogf(ctx, "cannot get ready when not in the lobby");
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+        }
 
         *msg_type = MSG_SET_READY;
         return CLIENT_BUILD_COMMAND_ERR_OK;
@@ -77,8 +79,10 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
         struct timespec ts_min_interval = {.tv_sec = 0, .tv_nsec = 1000000000 / (speed == 0 ? 1 : speed)};
         struct timespec ts_passed;
 
-        if (ctx->state.status != GAME_RUNNING)
+        if (ctx->state.status != GAME_RUNNING) {
+            qlogf(ctx, "cannot move when game is not running");
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+        }
 
         if (speed == 0) {
             fprintf(stderr, "speed is 0\n");
@@ -90,7 +94,7 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
 
         if (ts_cmp(ts_passed, ts_min_interval) < 0) {
             fprintf(stderr, "throttling movement, min intereval: " TIMESPEC_FS "s, passed: " TIMESPEC_FS "s\n",
-                  TIMESPEC_FARGS(ts_min_interval), TIMESPEC_FARGS(ts_passed));
+                    TIMESPEC_FARGS(ts_min_interval), TIMESPEC_FARGS(ts_passed));
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
         }
 
@@ -123,8 +127,10 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
             return CLIENT_BUILD_COMMAND_ERR_FAIL;
         }
 
-        if (ctx->state.status != GAME_RUNNING)
+        if (ctx->state.status != GAME_RUNNING) {
+            qlogf(ctx, "cannot place bombs when game is not running");
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+        }
 
         slot = gs_find_player_slot_by_id(&ctx->state, ctx->player_id);
         if (slot < 0) {
@@ -145,8 +151,10 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
     if (cmd == 'l') {
         msg_set_status_t status;
 
-        if (ctx->state.status == GAME_LOBBY)
+        if (ctx->state.status == GAME_LOBBY) {
+            qlogf(ctx, "already in lobby");
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+        }
 
         status.status = GAME_LOBBY;
         *msg_type = MSG_SET_STATUS;
@@ -174,5 +182,6 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
         return CLIENT_BUILD_COMMAND_ERR_NO_COMMAND;
     }
 
+    qlogf(ctx, "invalid command: '%c'", cmd);
     return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
 }

@@ -238,7 +238,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
     case MSG_ERROR: {
         msg_error_t err;
         if (proto_decode_error_payload(&err, payload, payload_len) == 0) {
-            fprintf(stderr, "[server][error] %s\n", err.text);
             qlogf(ctx, "[server][error] %s", err.text);
         }
         break;
@@ -268,7 +267,6 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         break;
 
     default:
-        fprintf(stderr, "[server] unhandled message type=%u\n", header->msg_type);
         qlogf(ctx, "[server] unhandled message type=%u", header->msg_type);
         break;
     }
