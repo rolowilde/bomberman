@@ -83,8 +83,6 @@ static int bound(int x, int bound_min, int bound_max) {
 }
 
 static int update_screen_size(void) {
-    /* TODO: clamp to some min screen size (maybe dependent of the map size) */
-
     struct winsize ws;
     if (ioctl(OUT_FD, TIOCGWINSZ, &ws) < 0) {
         perror("ioctl");
@@ -110,9 +108,10 @@ __attribute__((format(printf, 3, 4))) static void draw_text_line_format(size_t r
 }
 
 static void draw_screen_lobby(const client_ctx_t *ctx __attribute__((unused))) {
-    /* FIXME: placeholder, should be redone */
     draw_text_line_format(5, 10, "LOBBY");
-    draw_text_line_format(6, 10, CONTROLS_STR);
+    draw_text_line_format(7, 10, "- " CONTROLS_STR);
+    draw_text_line_format(
+        9, 10, "%s", ctx->state.players[ctx->player_id - 1].ready ? "[YOU ARE READY]" : "- press 'r' to get ready");
 }
 
 static char status_char(game_status_t status) {
@@ -126,7 +125,6 @@ static char status_char(game_status_t status) {
 }
 
 static void draw_screen_game(const client_ctx_t *ctx) {
-    /* FIXME: placeholder, should be redone */
     uint16_t rows;
     uint16_t cols;
     char *grid;
@@ -206,9 +204,10 @@ static void draw_screen_game(const client_ctx_t *ctx) {
             continue;
         }
         draw_text_line_format(
-            rows + 7 + i, 7, "id=%u alive=%d ready=%d pos=(%u,%u) bombs=%u radius=%u timer=%u speed=%u name=%s",
-            player->id, player->alive ? 1 : 0, player->ready ? 1 : 0, player->row, player->col, player->bomb_count,
-            player->bomb_radius, player->bomb_timer_ticks, player->speed, player->name);
+            rows + 7 + i, 5, "%sid=%u alive=%d ready=%d pos=(%u,%u) bombs=%u radius=%u timer=%u speed=%u name=%s%s",
+            player->id == ctx->player_id ? "[" : " ", player->id, player->alive ? 1 : 0, player->ready ? 1 : 0,
+            player->row, player->col, player->bomb_count, player->bomb_radius, player->bomb_timer_ticks, player->speed,
+            player->name, player->id == ctx->player_id ? "]" : " ");
     }
 
     free(grid);
@@ -216,6 +215,7 @@ static void draw_screen_game(const client_ctx_t *ctx) {
 
 static void draw_screen_game_over(const client_ctx_t *ctx __attribute__((unused))) {
     draw_text_line_format(5, 5, "GAME OVER");
+    draw_text_line_format(7, 5, "- press 'l' to return to lobby");
 }
 
 static void draw_rect(char ch_fill, char ch_border, size_t r1, size_t c1, size_t r2, size_t c2) {
