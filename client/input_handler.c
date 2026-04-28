@@ -1,10 +1,51 @@
 #include "client.h"
 
-#include <ctype.h>
+#include <bits/time.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "../common/include/serialization.h"
+#include "config.h"
+
+#define TIMESPEC_FS "%ld.%09ld"
+#define TIMESPEC_FARGS(_ts) (long)_ts.tv_sec, (long)_ts.tv_nsec
+
+static int ts_cmp(const struct timespec a, const struct timespec b) {
+    if (a.tv_sec < b.tv_sec)
+        return -1;
+    if (a.tv_sec > b.tv_sec)
+        return 1;
+
+    if (a.tv_nsec < b.tv_nsec)
+        return -1;
+    if (a.tv_nsec > b.tv_nsec)
+        return 1;
+
+    return 0;
+}
+
+static struct timespec ts_norm(struct timespec ts) {
+#define SECOND_NS 1000000000L
+    if (ts.tv_nsec >= SECOND_NS) {
+        ts.tv_sec += ts.tv_nsec / SECOND_NS;
+        ts.tv_nsec %= SECOND_NS;
+    } else if (ts.tv_nsec < 0) {
+        long sec = (-ts.tv_nsec / SECOND_NS) + 1;
+        ts.tv_sec -= sec;
+        ts.tv_nsec += sec * SECOND_NS;
+    }
+
+    return ts;
+#undef SECOND_NS
+}
+
+static struct timespec ts_diff(struct timespec a, struct timespec b) {
+    a.tv_sec -= b.tv_sec;
+    a.tv_nsec -= b.tv_nsec;
+
+    return ts_norm(a);
+}
 
 client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uint8_t *msg_type, uint8_t *sender_id,
                                                 uint8_t *target_id, uint8_t *payload, size_t payload_capacity,
@@ -31,9 +72,27 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
     /* wasd */
     if (cmd == 'w' || cmd == 'a' || cmd == 's' || cmd == 'd') {
         msg_move_attempt_t move;
+        struct timespec ts;
+        int speed = ctx->state.players[ctx->player_id - 1].speed;
+        struct timespec ts_min_interval = {.tv_sec = 0, .tv_nsec = 1000000000 / (speed == 0 ? 1 : speed)};
+        struct timespec ts_passed;
 
         if (ctx->state.status != GAME_RUNNING)
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+
+        if (speed == 0) {
+            qlogf(ctx, "speed is 0");
+            return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+        }
+
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        ts_passed = ts_diff(ts, ctx->ts_last_move);
+
+        if (ts_cmp(ts_passed, ts_min_interval) < 0) {
+            fprintf(stderr, "throttling movement, min intereval: " TIMESPEC_FS "s, passed: " TIMESPEC_FS "s\n",
+                  TIMESPEC_FARGS(ts_min_interval), TIMESPEC_FARGS(ts_passed));
+            return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
+        }
 
         if (cmd == 'w') {
             move.direction = DIR_UP;
@@ -49,6 +108,9 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
         if (proto_encode_move_attempt_payload(&move, payload, payload_capacity, payload_len) != 0) {
             return CLIENT_BUILD_COMMAND_ERR_FAIL;
         }
+
+        ctx->ts_last_move = ts;
+
         return CLIENT_BUILD_COMMAND_ERR_OK;
     }
 

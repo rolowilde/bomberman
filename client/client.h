@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "../common/include/game_state.h"
 #include "../common/include/protocol.h"
@@ -19,6 +20,7 @@ typedef struct {
     bool running;
     game_state_t state;
     uint16_t explosions[MAX_MAP_CELLS]; /* currently drawn explosion radiuses, 0 - no explosion */
+    struct timespec ts_last_move;
     char qlog[MAX_CLIENT_LOG_COUNT][MAX_CLIENT_LOG_STRLEN];
     size_t qlog_beg, qlog_end;
     char player_name[MAX_NAME_LEN + 1];
