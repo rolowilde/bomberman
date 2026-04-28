@@ -9,7 +9,7 @@ ifeq (,$(filter $(MODE),$(VALID_MODES)))
 $(error invalid MODE '$(MODE)', valid modes are: $(VALID_MODES))
 endif
 
-CFLAGS := -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L -Icommon/include -Iserver -Iclient
+CFLAGS := -Wall -Wextra -pedantic -std=c99 -D_POSIX_C_SOURCE=200809L -Icommon/include -Iserver -Iclient -MMD -MP
 LDFLAGS :=
 
 BUILD_DIR_ROOT := build
@@ -32,6 +32,8 @@ COMMON_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(COMMON_SRCS))
 SERVER_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(SERVER_SRCS))
 CLIENT_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(CLIENT_SRCS))
 TEST_OBJS := $(patsubst %.c,$(BUILD_DIR)/%.o,$(TEST_SRCS))
+
+DEPS := $(COMMON_OBJS:.o=.d) $(SERVER_OBJS:.o=.d) $(CLIENT_OBJS:.o=.d) $(TEST_OBJS:.o=.d)
 
 COMMON_LIB := $(BUILD_DIR)/libbomberman.a
 SERVER_BIN := $(BIN_DIR)/bomberman_server
@@ -79,5 +81,7 @@ run-client: $(CLIENT_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR_ROOT) $(BIN_DIR_ROOT)
+
+-include $(DEPS)
 
 .PHONY: all clean tests run-server run-client
