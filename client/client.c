@@ -1,4 +1,5 @@
 #include "client.h"
+#include "config.h"
 #include "sigthread.h"
 
 #include <arpa/inet.h>
@@ -72,6 +73,13 @@ static int send_hello(client_ctx_t *ctx) {
     }
 
     return sock_send_message(ctx->fd, MSG_HELLO, SERVER_ENDPOINT_ID, SERVER_ENDPOINT_ID, payload, payload_len);
+}
+
+static int send_leave(client_ctx_t *ctx) {
+    uint8_t sender_id = ctx->has_welcome ? ctx->player_id : SERVER_ENDPOINT_ID;
+    uint8_t target_id = SERVER_ENDPOINT_ID;
+
+    return sock_send_message(ctx->fd, MSG_LEAVE, sender_id, target_id, NULL, 0);
 }
 
 /* must be called before creating any other threads */
@@ -154,6 +162,9 @@ static void handle_fd_input(client_ctx_t *ctx) {
     build_command_ret = client_build_command(ctx, c, &msg_type, &sender_id, &target_id, payload, sizeof(payload),
                                              &payload_len, &should_quit);
 
+    if (should_quit)
+        ctx->running = false;
+
     if (build_command_ret == CLIENT_BUILD_COMMAND_ERR_FAIL) {
         fprintf(stderr, "command encoding failed\n");
         ctx->running = false;
@@ -167,10 +178,6 @@ static void handle_fd_input(client_ctx_t *ctx) {
         fprintf(stderr, "failed to send command\n");
         ctx->running = false;
         return;
-    }
-
-    if (should_quit) {
-        ctx->running = false;
     }
 }
 
@@ -287,7 +294,7 @@ int main(int argc, char **argv) {
             client_ui_render(&ctx);
     }
 
-    /* TODO: send MSG_LEAVE */
+    send_leave(&ctx);
 
     restore_orig_input_mode();
     client_ui_deinit();

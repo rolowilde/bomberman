@@ -101,11 +101,9 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
     }
 
     /* quit */
-    /* TODO: send MSG_LEAVE in main() after the main loop instead and return CLIENT_BUILD_COMMAND_ERR_NO_COMMAND here */
     if (cmd == 'q') {
-        *msg_type = MSG_LEAVE;
         *should_quit = true;
-        return CLIENT_BUILD_COMMAND_ERR_OK;
+        return CLIENT_BUILD_COMMAND_ERR_NO_COMMAND;
     }
 
     /* help */
