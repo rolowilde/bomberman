@@ -221,6 +221,7 @@ int main(int argc, char **argv) {
     }
 
     freopen("/tmp/bomberman.log", "a", stderr);
+    setvbuf(stderr, NULL, _IOLBF, 0);
     fprintf(stderr, "Starting...\n");
 
     if (init_signals(&signal_tid) != 0)
@@ -300,6 +301,8 @@ int main(int argc, char **argv) {
     client_ui_deinit();
     close(ctx.fd);
     gs_free(&ctx.state);
+
+    fprintf(stderr, "Exiting...\n");
 
     return 0;
 }
