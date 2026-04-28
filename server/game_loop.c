@@ -60,7 +60,7 @@ void server_tick(server_ctx_t *ctx) {
     }
 
     for (i = 0; i < MAX_BOMBS; ++i) {
-        if (ctx->state.bombs[i].active && ctx->state.bombs[i].timer_ticks > 0) {
+        if (ctx->state.bombs[i].owner_id != 0 && ctx->state.bombs[i].timer_ticks > 0) {
             ctx->state.bombs[i].timer_ticks--;
         }
     }
@@ -68,7 +68,7 @@ void server_tick(server_ctx_t *ctx) {
     do {
         exploded = false;
         for (i = 0; i < MAX_BOMBS; ++i) {
-            if (ctx->state.bombs[i].active && ctx->state.bombs[i].timer_ticks == 0) {
+            if (ctx->state.bombs[i].owner_id != 0 && ctx->state.bombs[i].timer_ticks == 0) {
                 server_process_bomb_explosion(ctx, i);
                 exploded = true;
             }

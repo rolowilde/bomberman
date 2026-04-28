@@ -105,6 +105,7 @@ int server_load_map(server_ctx_t *ctx, const char *path) {
     for (c = 0; c < MAX_PLAYERS; ++c) {
         player_t *player = &ctx->state.players[c];
         player->id = (uint8_t)(c + 1);
+        player->lives = 0;
         player->alive = false;
         player->ready = false;
         player->bomb_count = 1;

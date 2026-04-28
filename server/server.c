@@ -203,7 +203,7 @@ bool server_cell_blocked(const server_ctx_t *ctx, uint16_t row, uint16_t col) {
     }
 
     for (i = 0; i < MAX_BOMBS; ++i) {
-        if (ctx->state.bombs[i].active && ctx->state.bombs[i].row == row && ctx->state.bombs[i].col == col) {
+        if (ctx->state.bombs[i].owner_id != 0 && ctx->state.bombs[i].row == row && ctx->state.bombs[i].col == col) {
             return true;
         }
     }
@@ -244,6 +244,7 @@ void server_reset_round(server_ctx_t *ctx) {
 
         player->ready = false;
         player->alive = false;
+        player->lives = 0;
         player->bomb_count = 1;
         player->bomb_radius = ctx->default_bomb_radius;
         player->bomb_timer_ticks = ctx->default_bomb_timer_ticks;
@@ -276,6 +277,7 @@ void server_disconnect_client(server_ctx_t *ctx, server_client_t *client, bool n
 
     ctx->state.players[slot].alive = false;
     ctx->state.players[slot].ready = false;
+    ctx->state.players[slot].lives = 0;
 
     fprintf(stdout, "client disconnected, slot=%d, id=%u\n", slot, client->id);
 }
@@ -314,6 +316,7 @@ static void accept_connection(server_ctx_t *ctx) {
     player->id = client->id;
     player->ready = false;
     player->alive = false;
+    player->lives = 0;
     player->bomb_count = 1;
     player->bomb_radius = ctx->default_bomb_radius;
     player->bomb_timer_ticks = ctx->default_bomb_timer_ticks;

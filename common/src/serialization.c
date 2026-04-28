@@ -156,7 +156,7 @@ size_t proto_sync_board_payload_size(const msg_sync_board_t *msg) {
     if (msg == NULL || msg->player_count > MAX_PLAYERS) {
         return 0;
     }
-    return 2 + ((size_t)msg->player_count * 11);
+    return 2 + ((size_t)msg->player_count * 12);
 }
 
 int proto_encode_hello_payload(const msg_hello_t *msg, uint8_t *buffer, size_t buffer_len, size_t *written) {
@@ -634,6 +634,7 @@ int proto_encode_sync_board_payload(const msg_sync_board_t *msg, uint8_t *buffer
 
     for (index = 0; index < msg->player_count; ++index) {
         if (write_u8(buffer, buffer_len, &offset, msg->players[index].id) != 0 ||
+            write_u8(buffer, buffer_len, &offset, msg->players[index].lives) != 0 ||
             write_u16_be(buffer, buffer_len, &offset, msg->players[index].cell_index) != 0 ||
             write_u8(buffer, buffer_len, &offset, msg->players[index].alive ? 1u : 0u) != 0 ||
             write_u8(buffer, buffer_len, &offset, msg->players[index].ready ? 1u : 0u) != 0 ||
@@ -669,13 +670,14 @@ int proto_decode_sync_board_payload(msg_sync_board_t *msg, const uint8_t *buffer
         return -1;
     }
 
-    expected = 2 + ((size_t)msg->player_count * 11);
+    expected = 2 + ((size_t)msg->player_count * 12);
     if (buffer_len != expected) {
         return -1;
     }
 
     for (index = 0; index < msg->player_count; ++index) {
         if (read_u8(buffer, buffer_len, &offset, &msg->players[index].id) != 0 ||
+            read_u8(buffer, buffer_len, &offset, &msg->players[index].lives) != 0 ||
             read_u16_be(buffer, buffer_len, &offset, &msg->players[index].cell_index) != 0 ||
             read_u8(buffer, buffer_len, &offset, &alive_byte) != 0 ||
             read_u8(buffer, buffer_len, &offset, &ready_byte) != 0 ||

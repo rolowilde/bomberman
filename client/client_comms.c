@@ -117,6 +117,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
                 player->col = col;
                 player->alive = sync.players[i].alive;
                 player->ready = sync.players[i].ready;
+                player->lives = sync.players[i].lives;
                 player->bomb_count = sync.players[i].bomb_count;
                 player->bomb_radius = sync.players[i].bomb_radius;
                 player->bomb_timer_ticks = sync.players[i].bomb_timer_ticks;
@@ -174,6 +175,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         if (proto_decode_death_payload(&death, payload, payload_len) == 0 && death.player_id >= 1 &&
             death.player_id <= MAX_PLAYERS) {
             ctx->state.players[death.player_id - 1].alive = false;
+            ctx->state.players[death.player_id - 1].lives = 0;
             printf("[server] player %u died\n", death.player_id);
         }
         break;

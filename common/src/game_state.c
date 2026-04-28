@@ -11,6 +11,7 @@ void gs_init(game_state_t *state) {
 
     for (i = 0; i < MAX_PLAYERS; ++i) {
         state->players[i].id = (uint8_t)(i + 1);
+        state->players[i].lives = 0;
         state->players[i].alive = false;
         state->players[i].ready = false;
         state->players[i].bomb_count = 1;
@@ -125,9 +126,8 @@ int gs_add_bomb(game_state_t *state, const bomb_t *bomb) {
     size_t i;
 
     for (i = 0; i < MAX_BOMBS; ++i) {
-        if (!state->bombs[i].active) {
+        if (state->bombs[i].owner_id == 0) {
             state->bombs[i] = *bomb;
-            state->bombs[i].active = true;
             return (int)i;
         }
     }

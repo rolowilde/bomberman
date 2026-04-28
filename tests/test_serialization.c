@@ -88,6 +88,7 @@ static void test_sync_roundtrip(void) {
     in.player_count = 2;
 
     in.players[0].id = 1;
+    in.players[0].lives = 1;
     in.players[0].cell_index = 4;
     in.players[0].alive = true;
     in.players[0].ready = true;
@@ -97,6 +98,7 @@ static void test_sync_roundtrip(void) {
     in.players[0].speed = 3;
 
     in.players[1].id = 2;
+    in.players[1].lives = 0;
     in.players[1].cell_index = 7;
     in.players[1].alive = false;
     in.players[1].ready = true;
@@ -112,6 +114,7 @@ static void test_sync_roundtrip(void) {
     assert(out.player_count == 2);
     assert(out.players[0].alive == true);
     assert(out.players[1].cell_index == 7);
+    assert(out.players[0].lives == 1);
     assert(out.players[0].bomb_radius == 2);
     assert(out.players[0].bomb_timer_ticks == 60);
     assert(out.players[1].speed == 4);

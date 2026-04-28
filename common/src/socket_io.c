@@ -247,7 +247,7 @@ int sock_recv_payload_by_type(
         }
 
         player_count = payload[1];
-        extra_len = (size_t)player_count * 11;
+        extra_len = (size_t)player_count * 12;
         if (player_count > MAX_PLAYERS || base_len + extra_len > max_len) {
             return -1;
         }

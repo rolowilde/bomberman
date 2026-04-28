@@ -60,6 +60,7 @@ void server_send_sync_to_all(server_ctx_t *ctx) {
         }
 
         sync.players[sync.player_count].id = ctx->state.players[i].id;
+        sync.players[sync.player_count].lives = ctx->state.players[i].lives;
         sync.players[sync.player_count].cell_index =
             make_cell_index(ctx->state.players[i].row, ctx->state.players[i].col, ctx->state.map.cols);
         sync.players[sync.player_count].alive = ctx->state.players[i].alive;
@@ -149,6 +150,7 @@ static void maybe_start_game(server_ctx_t *ctx) {
     for (i = 0; i < MAX_PLAYERS; ++i) {
         if (ctx->clients[i].active) {
             ctx->state.players[i].alive = true;
+            ctx->state.players[i].lives = 1;
         }
     }
 
@@ -335,7 +337,7 @@ static int handle_bomb_attempt(server_ctx_t *ctx, server_client_t *client, const
     }
 
     for (i = 0; i < MAX_BOMBS; ++i) {
-        if (ctx->state.bombs[i].active &&
+        if (ctx->state.bombs[i].owner_id != 0 &&
             ctx->state.bombs[i].row == player->row &&
             ctx->state.bombs[i].col == player->col) {
             send_error(client, SERVER_ENDPOINT_ID, "cell already contains a bomb");
@@ -344,7 +346,6 @@ static int handle_bomb_attempt(server_ctx_t *ctx, server_client_t *client, const
     }
 
     memset(&bomb, 0, sizeof(bomb));
-    bomb.active = true;
     bomb.owner_id = player->id;
     bomb.row = player->row;
     bomb.col = player->col;
@@ -421,6 +422,10 @@ int server_handle_client_message(
 
         case MSG_SET_STATUS:
             return handle_set_status(ctx, client, payload, payload_len);
+
+        case MSG_SYNC_REQUEST:
+            server_send_sync_to_all(ctx);
+            return 0;
 
         case MSG_PING:
             server_send_to_client(client, MSG_PONG, SERVER_ENDPOINT_ID, client->id, NULL, 0);

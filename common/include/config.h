@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #define MAX_PLAYERS 8
-#define MAX_NAME_LEN 30
+#define MAX_NAME_LEN 15
 #define MAX_ID_LEN 20
 #define MAX_ERROR_LEN 255
 #define TICKS_PER_SECOND 20
@@ -46,7 +46,6 @@ typedef enum {
     MSG_LEAVE = 5,
     MSG_ERROR = 6,
     MSG_MAP = 7,
-    MSG_SYNC_BOARD = 8,
     MSG_SET_READY = 10,
     MSG_SET_STATUS = 20,
     MSG_WINNER = 23,
@@ -59,7 +58,9 @@ typedef enum {
     MSG_DEATH = 44,
     MSG_BONUS_AVAILABLE = 45,
     MSG_BONUS_RETRIEVED = 46,
-    MSG_BLOCK_DESTROYED = 47
+    MSG_BLOCK_DESTROYED = 47,
+    MSG_SYNC_BOARD = 100,
+    MSG_SYNC_REQUEST = 101
 } msg_type_t;
 
 typedef enum {
@@ -74,6 +75,7 @@ typedef enum {
 
 typedef struct {
     uint8_t id;
+    uint8_t lives;
     char name[MAX_NAME_LEN + 1];
     uint16_t row;
     uint16_t col;
@@ -86,7 +88,6 @@ typedef struct {
 } player_t;
 
 typedef struct {
-    bool active;
     uint8_t owner_id;
     uint16_t row;
     uint16_t col;

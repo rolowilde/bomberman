@@ -48,6 +48,8 @@ const char *msg_type_name(uint8_t msg_type) {
             return "BONUS_RETRIEVED";
         case MSG_BLOCK_DESTROYED:
             return "BLOCK_DESTROYED";
+        case MSG_SYNC_REQUEST:
+            return "SYNC_REQUEST";
         default:
             return "UNKNOWN";
     }
@@ -99,6 +101,8 @@ size_t msg_type_fixed_payload_size(uint8_t msg_type) {
             return 2;
         case MSG_WINNER:
             return 1;
+        case MSG_SYNC_REQUEST:
+            return 0;
         case MSG_WELCOME:
         case MSG_ERROR:
         case MSG_MAP:

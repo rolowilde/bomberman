@@ -98,6 +98,7 @@ typedef struct {
 
 typedef struct {
     uint8_t id;
+    uint8_t lives;
     uint16_t cell_index;
     bool alive;
     bool ready;

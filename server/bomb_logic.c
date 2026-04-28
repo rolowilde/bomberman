@@ -65,6 +65,7 @@ static void mark_players_dead_on_cell(server_ctx_t *ctx, uint16_t row, uint16_t 
 
         if (player->row == row && player->col == col) {
             player->alive = false;
+            player->lives = 0;
             broadcast_death(ctx, player->id);
         }
     }
@@ -75,7 +76,7 @@ static void chain_bombs_on_cell(server_ctx_t *ctx, uint16_t row, uint16_t col, s
 
     for (i = 0; i < MAX_BOMBS; ++i) {
         bomb_t *bomb = &ctx->state.bombs[i];
-        if (!bomb->active || i == except_index) {
+        if (bomb->owner_id == 0 || i == except_index) {
             continue;
         }
         if (bomb->row == row && bomb->col == col && bomb->timer_ticks > 0) {
@@ -108,7 +109,7 @@ void server_process_bomb_explosion(server_ctx_t *ctx, size_t bomb_index) {
     size_t payload_len;
     size_t dir;
 
-    if (bomb_index >= MAX_BOMBS || !ctx->state.bombs[bomb_index].active) {
+    if (bomb_index >= MAX_BOMBS || ctx->state.bombs[bomb_index].owner_id == 0) {
         return;
     }
 
