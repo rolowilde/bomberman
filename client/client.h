@@ -9,6 +9,8 @@
 #include "../common/include/protocol.h"
 
 #define CONTROLS_STR "controls: r (ready), w/a/s/d (move), b (bomb), p (ping), l (lobby), q (quit)"
+#define MAX_CLIENT_LOG_COUNT 16
+#define MAX_CLIENT_LOG_STRLEN 512
 
 typedef struct {
     int fd;
@@ -16,6 +18,9 @@ typedef struct {
     bool has_welcome;
     bool running;
     game_state_t state;
+    uint16_t explosions[MAX_MAP_CELLS]; /* currently drawn explosion radiuses, 0 - no explosion */
+    char qlog[MAX_CLIENT_LOG_COUNT][MAX_CLIENT_LOG_STRLEN];
+    size_t qlog_beg, qlog_end;
     char player_name[MAX_NAME_LEN + 1];
 } client_ctx_t;
 
@@ -25,6 +30,8 @@ typedef enum {
     CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT,
     CLIENT_BUILD_COMMAND_ERR_NO_COMMAND,
 } client_build_command_err_t;
+
+__attribute__((format(printf, 2, 3))) void qlogf(client_ctx_t *ctx, const char *fmt, ...);
 
 int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, const uint8_t *payload,
                                  size_t payload_len);

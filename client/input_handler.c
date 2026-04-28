@@ -109,10 +109,8 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
     }
 
     /* help */
-    /* TODO: either remove this or change the behavior: maybe make a permanent help message the visibility of which can
-     * be toggled with this (or just send  msg to clien-facing logs) */
     if (cmd == 'h') {
-        printf(CONTROLS_STR "\n");
+        qlogf(ctx, CONTROLS_STR);
         return CLIENT_BUILD_COMMAND_ERR_NO_COMMAND;
     }
 

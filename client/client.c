@@ -6,6 +6,7 @@
 #include <netdb.h>
 #include <pthread.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -190,6 +191,19 @@ static void enable_raw_input_mode() {
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 }
 
+void qlogf(client_ctx_t *ctx, const char *fmt, ...) {
+    va_list args;
+    char *buf = ctx->qlog[ctx->qlog_end];
+
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(ctx->qlog[0]), fmt, args);
+    va_end(args);
+
+    ctx->qlog_end = (ctx->qlog_end + 1) % MAX_CLIENT_LOG_COUNT;
+    if (ctx->qlog_beg == ctx->qlog_end)
+        ctx->qlog_beg = (ctx->qlog_beg + 1) % MAX_CLIENT_LOG_COUNT;
+}
+
 int main(int argc, char **argv) {
     client_ctx_t ctx;
     long port;
@@ -217,6 +231,7 @@ int main(int argc, char **argv) {
     ctx.player_name[MAX_NAME_LEN] = '\0';
     ctx.running = true;
     ctx.fd = connect_to_server(argv[1], (uint16_t)port);
+    ctx.qlog_beg = ctx.qlog_end = 0;
 
     if (ctx.fd < 0) {
         fprintf(stderr, "could not connect to server\n");
@@ -234,7 +249,7 @@ int main(int argc, char **argv) {
     client_ui_init();
     enable_raw_input_mode();
 
-    /* TODO: maybe add client-facing logs  */
+    qlogf(&ctx, "client started");
 
     client_ui_render(&ctx);
 

@@ -1,6 +1,8 @@
 #include "client.h"
+#include "config.h"
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,6 +24,8 @@
 #define MAX_COLS 512
 
 #define CONST_STRLEN(s) (sizeof(s) - 1)
+
+#define CHAR_NOCHAR '\0'
 
 static bool screen_resized = false;
 
@@ -127,6 +131,7 @@ static void draw_screen_game(const client_ctx_t *ctx) {
     uint16_t cols;
     char *grid;
     size_t i;
+    const int map_offset_r = 5, map_offset_c = 5;
 
     if (ctx == NULL || ctx->state.map.cells == NULL) {
         draw_text_line_format(5, 5, "[render] map not available yet");
@@ -163,8 +168,34 @@ static void draw_screen_game(const client_ctx_t *ctx) {
 
     for (uint16_t r = 0; r < rows; ++r) {
         for (uint16_t c = 0; c < cols; ++c) {
-            sb[r + 5][c * 2 + 5] = grid[make_cell_index(r, c, cols)];
-            sb[r + 5][c * 2 + 1 + 5] = ' ';
+            sb[r + map_offset_r][c * 2 + map_offset_c] = grid[make_cell_index(r, c, cols)];
+            sb[r + map_offset_r][c * 2 + 1 + map_offset_c] = ' ';
+        }
+    }
+
+    for (uint16_t r = 0; r < rows; ++r) {
+        for (uint16_t c = 0; c < cols; ++c) {
+            int rad = ctx->explosions[r * MAX_MAP_SIDE + c];
+            static const int dr[4] = {-1, 1, 0, 0};
+            static const int dc[4] = {0, 0, -1, 1};
+
+            if (rad == 0)
+                continue;
+
+            for (int dir = 0; dir < 4; dir++) {
+                for (int i = 0; i <= rad; i++) {
+                    int r2 = r + i * dr[dir];
+                    int c2 = c + i * dc[dir];
+
+                    if (r2 < 0 || r2 >= rows || c2 < 0 || c2 >= cols)
+                        continue;
+
+                    if (grid[make_cell_index(r2, c2, cols)] != '.')
+                        continue;
+
+                    sb[r2 + map_offset_r][c2 * 2 + map_offset_c] = '#';
+                }
+            }
         }
     }
 
@@ -185,6 +216,36 @@ static void draw_screen_game(const client_ctx_t *ctx) {
 
 static void draw_screen_game_over(const client_ctx_t *ctx __attribute__((unused))) {
     draw_text_line_format(5, 5, "GAME OVER");
+}
+
+static void draw_rect(char ch_fill, char ch_border, size_t r1, size_t c1, size_t r2, size_t c2) {
+    for (size_t y = r1; y <= r2; y++) {
+        for (size_t x = c1; x <= c2; x++) {
+            if (y != r1 && y != r2 && x != c1 && x != c2) {
+                if (ch_fill != CHAR_NOCHAR)
+                    sb[y][x] = ch_fill;
+            } else {
+                if (ch_border != CHAR_NOCHAR)
+                    sb[y][x] = ch_border;
+            }
+        }
+    }
+}
+
+static void draw_qlog(const client_ctx_t *ctx, size_t r1, size_t c1, size_t r2, size_t c2) {
+    draw_rect(' ', '#', r1, c1, r2, c2);
+    size_t row = r1 + 1;
+    size_t logs_total = (ctx->qlog_end + MAX_CLIENT_LOG_COUNT - ctx->qlog_beg) % MAX_CLIENT_LOG_COUNT;
+    size_t logs_visible = bound(r2 - r1 - 1, 0, logs_total);
+
+    for (size_t i = (ctx->qlog_end + MAX_CLIENT_LOG_COUNT - logs_visible) % MAX_CLIENT_LOG_COUNT; i != ctx->qlog_end;
+         i = (i + 1) % MAX_CLIENT_LOG_COUNT) {
+        if (row >= r2)
+            break;
+
+        draw_text_line_format(row, c1 + 2, "%s", ctx->qlog[i]);
+        row++;
+    }
 }
 
 int client_ui_init(void) {
@@ -228,15 +289,10 @@ int client_ui_render(const client_ctx_t *ctx) {
         break;
     }
 
-    /* border */
-    for (size_t y = 0; y < screen_rows; y++) {
-        for (size_t x = 0; x < screen_cols; x++) {
-            if (y != 0 && y != screen_rows - 1 && x != 0 && x != screen_cols - 1)
-                continue;
+    draw_qlog(ctx, screen_rows - 5 - 2 - 1, 0, screen_rows - 1, screen_cols - 1);
 
-            sb[y][x] = '#';
-        }
-    }
+    /* border */
+    draw_rect(CHAR_NOCHAR, '#', 0, 0, screen_rows - 1, screen_cols - 1);
 
     sb_flush();
 

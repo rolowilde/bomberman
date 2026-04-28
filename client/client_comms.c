@@ -1,8 +1,9 @@
-#include "client.h"
-#include <stdio.h>
-#include <string.h>
 #include "../common/include/serialization.h"
 #include "../common/include/socket_io.h"
+#include "client.h"
+#include "config.h"
+#include <stdio.h>
+#include <string.h>
 
 static void apply_map_payload(client_ctx_t *ctx, const msg_map_t *map_msg) {
     if (gs_resize_map(&ctx->state, map_msg->rows, map_msg->cols) != 0) {
@@ -27,7 +28,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
                 strncpy(player->name, hello.player_name, MAX_NAME_LEN);
                 player->name[MAX_NAME_LEN] = '\0';
             }
-            printf("[server] player joined: %s\n", hello.player_name);
+            qlogf(ctx, "[server] player joined: %s", hello.player_name);
         }
         break;
     }
@@ -61,7 +62,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             }
         }
 
-        printf("[server] welcome, assigned id=%u status=%u\n", ctx->player_id, welcome.game_status);
+        qlogf(ctx, "[server] welcome, assigned id=%u status=%u", ctx->player_id, welcome.game_status);
         break;
     }
 
@@ -69,7 +70,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         msg_set_status_t status;
         if (proto_decode_set_status_payload(&status, payload, payload_len) == 0) {
             ctx->state.status = (game_status_t)status.status;
-            printf("[server] status changed to %u\n", status.status);
+            qlogf(ctx, "[server] status changed to %u", status.status);
         }
         break;
     }
@@ -79,7 +80,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             player_t *player = &ctx->state.players[header->sender_id - 1];
             player->id = header->sender_id;
             player->ready = true;
-            printf("[server] player %u is ready\n", header->sender_id);
+            qlogf(ctx, "[server] player %u is ready", header->sender_id);
         }
         break;
 
@@ -154,7 +155,11 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
     case MSG_EXPLOSION_START: {
         msg_explosion_start_t explosion;
         if (proto_decode_explosion_start_payload(&explosion, payload, payload_len) == 0) {
-            printf("[server] explosion start at cell=%u radius=%u\n", explosion.cell_index, explosion.radius);
+            uint16_t row;
+            uint16_t col;
+            qlogf(ctx, "[server] explosion start at cell=%u radius=%u", explosion.cell_index, explosion.radius);
+            split_cell_index(explosion.cell_index, ctx->state.map.cols, &row, &col);
+            ctx->explosions[row * MAX_MAP_SIDE + col] = explosion.radius;
         }
         break;
     }
@@ -164,8 +169,10 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         if (proto_decode_explosion_end_payload(&explosion, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
             uint16_t row;
             uint16_t col;
+            qlogf(ctx, "[server] explosion end at cell=%u", explosion.cell_index);
             split_cell_index(explosion.cell_index, ctx->state.map.cols, &row, &col);
             gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
+            ctx->explosions[row * MAX_MAP_SIDE + col] = 0;
         }
         break;
     }
@@ -176,7 +183,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             death.player_id <= MAX_PLAYERS) {
             ctx->state.players[death.player_id - 1].alive = false;
             ctx->state.players[death.player_id - 1].lives = 0;
-            printf("[server] player %u died\n", death.player_id);
+            qlogf(ctx, "[server] player %u died", death.player_id);
         }
         break;
     }
@@ -223,7 +230,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
     case MSG_WINNER: {
         msg_winner_t winner;
         if (proto_decode_winner_payload(&winner, payload, payload_len) == 0) {
-            printf("[server] winner is player %u\n", winner.winner_id);
+            qlogf(ctx, "[server] winner is player %u", winner.winner_id);
         }
         break;
     }
@@ -231,13 +238,13 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
     case MSG_ERROR: {
         msg_error_t err;
         if (proto_decode_error_payload(&err, payload, payload_len) == 0) {
-            printf("[server][error] %s\n", err.text);
+            qlogf(ctx, "[server][error] %s", err.text);
         }
         break;
     }
 
     case MSG_DISCONNECT:
-        printf("[server] disconnect requested\n");
+        qlogf(ctx, "[server] disconnect requested");
         ctx->running = false;
         return 1;
 
@@ -247,7 +254,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
             ctx->state.players[slot].alive = false;
             ctx->state.players[slot].ready = false;
             ctx->state.players[slot].name[0] = '\0';
-            printf("[server] player %u left\n", header->sender_id);
+            qlogf(ctx, "[server] player %u left", header->sender_id);
         }
         break;
 
@@ -256,11 +263,11 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         break;
 
     case MSG_PONG:
-        printf("[server] pong\n");
+        qlogf(ctx, "[server] pong");
         break;
 
     default:
-        printf("[server] unhandled message type=%u\n", header->msg_type);
+        qlogf(ctx, "[server] unhandled message type=%u", header->msg_type);
         break;
     }
 
