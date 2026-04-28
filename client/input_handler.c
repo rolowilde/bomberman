@@ -81,7 +81,7 @@ client_build_command_err_t client_build_command(client_ctx_t *ctx, char cmd, uin
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
 
         if (speed == 0) {
-            qlogf(ctx, "speed is 0");
+            fprintf(stderr, "speed is 0\n");
             return CLIENT_BUILD_COMMAND_ERR_INVALID_INPUT;
         }
 

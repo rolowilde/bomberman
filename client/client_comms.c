@@ -157,7 +157,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         if (proto_decode_explosion_start_payload(&explosion, payload, payload_len) == 0) {
             uint16_t row;
             uint16_t col;
-            qlogf(ctx, "[server] explosion start at cell=%u radius=%u", explosion.cell_index, explosion.radius);
+            fprintf(stderr, "[server] explosion start at cell=%u radius=%u\n", explosion.cell_index, explosion.radius);
             split_cell_index(explosion.cell_index, ctx->state.map.cols, &row, &col);
             ctx->explosions[row * MAX_MAP_SIDE + col] = explosion.radius;
         }
@@ -169,7 +169,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         if (proto_decode_explosion_end_payload(&explosion, payload, payload_len) == 0 && ctx->state.map.cols > 0) {
             uint16_t row;
             uint16_t col;
-            qlogf(ctx, "[server] explosion end at cell=%u", explosion.cell_index);
+            fprintf(stderr, "[server] explosion end at cell=%u\n", explosion.cell_index);
             split_cell_index(explosion.cell_index, ctx->state.map.cols, &row, &col);
             gs_cell_set(&ctx->state, row, col, CELL_EMPTY);
             ctx->explosions[row * MAX_MAP_SIDE + col] = 0;
@@ -238,6 +238,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
     case MSG_ERROR: {
         msg_error_t err;
         if (proto_decode_error_payload(&err, payload, payload_len) == 0) {
+            fprintf(stderr, "[server][error] %s\n", err.text);
             qlogf(ctx, "[server][error] %s", err.text);
         }
         break;
@@ -267,6 +268,7 @@ int client_handle_server_message(client_ctx_t *ctx, const msg_header_t *header, 
         break;
 
     default:
+        fprintf(stderr, "[server] unhandled message type=%u\n", header->msg_type);
         qlogf(ctx, "[server] unhandled message type=%u", header->msg_type);
         break;
     }
