@@ -26,6 +26,38 @@ static void broadcast_block_destroyed(server_ctx_t *ctx, uint16_t row, uint16_t 
     }
 }
 
+static void broadcast_explosion_end(server_ctx_t *ctx, uint16_t cell_index) {
+    uint8_t payload[16];
+    size_t payload_len = 0;
+    msg_explosion_end_t msg;
+
+    msg.cell_index = cell_index;
+    if (proto_encode_explosion_end_payload(&msg, payload, sizeof(payload), &payload_len) == 0) {
+        server_broadcast(ctx, MSG_EXPLOSION_END, SERVER_ENDPOINT_ID, payload, payload_len, -1);
+    }
+}
+
+static void schedule_explosion_end(server_ctx_t *ctx, uint16_t cell_index) {
+    size_t i;
+    uint16_t duration = ctx->explosion_duration_ticks;
+
+    if (duration == 0) {
+        broadcast_explosion_end(ctx, cell_index);
+        return;
+    }
+
+    for (i = 0; i < MAX_BOMBS; ++i) {
+        if (!ctx->explosions[i].active) {
+            ctx->explosions[i].active = true;
+            ctx->explosions[i].cell_index = cell_index;
+            ctx->explosions[i].remaining_ticks = duration;
+            return;
+        }
+    }
+
+    broadcast_explosion_end(ctx, cell_index);
+}
+
 static void maybe_spawn_bonus(server_ctx_t *ctx, uint16_t row, uint16_t col) {
     int roll = rand() % 100;
 
@@ -104,7 +136,6 @@ void server_process_bomb_explosion(server_ctx_t *ctx, size_t bomb_index) {
     static const int dc[4] = {0, 0, -1, 1};
     bomb_t bomb;
     msg_explosion_start_t start_msg;
-    msg_explosion_end_t end_msg;
     uint8_t payload[16];
     size_t payload_len;
     size_t dir;
@@ -161,11 +192,7 @@ void server_process_bomb_explosion(server_ctx_t *ctx, size_t bomb_index) {
         }
     }
 
-    end_msg.cell_index = make_cell_index(bomb.row, bomb.col, ctx->state.map.cols);
-    payload_len = 0;
-    if (proto_encode_explosion_end_payload(&end_msg, payload, sizeof(payload), &payload_len) == 0) {
-        server_broadcast(ctx, MSG_EXPLOSION_END, SERVER_ENDPOINT_ID, payload, payload_len, -1);
-    }
+    schedule_explosion_end(ctx, make_cell_index(bomb.row, bomb.col, ctx->state.map.cols));
 
     server_send_sync_to_all(ctx);
 }

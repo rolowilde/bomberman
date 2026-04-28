@@ -18,6 +18,12 @@ typedef struct {
 } server_client_t;
 
 typedef struct {
+    bool active;
+    uint16_t cell_index;
+    uint16_t remaining_ticks;
+} explosion_t;
+
+typedef struct {
     int listen_fd;
     uint16_t port;
     bool running;
@@ -32,6 +38,8 @@ typedef struct {
     bool spawn_defined[MAX_PLAYERS];
     uint16_t spawn_rows[MAX_PLAYERS];
     uint16_t spawn_cols[MAX_PLAYERS];
+
+    explosion_t explosions[MAX_BOMBS];
 
     uint8_t initial_cells[MAX_MAP_CELLS];
     uint16_t initial_cell_count;

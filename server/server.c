@@ -239,6 +239,12 @@ void server_reset_round(server_ctx_t *ctx) {
         gs_clear_bomb(&ctx->state, i);
     }
 
+    for (i = 0; i < MAX_BOMBS; ++i) {
+        ctx->explosions[i].active = false;
+        ctx->explosions[i].cell_index = 0;
+        ctx->explosions[i].remaining_ticks = 0;
+    }
+
     for (i = 0; i < MAX_PLAYERS; ++i) {
         player_t *player = &ctx->state.players[i];
 

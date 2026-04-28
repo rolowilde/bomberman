@@ -5,6 +5,33 @@
 
 #include "../common/include/serialization.h"
 
+static void process_explosion_timers(server_ctx_t *ctx) {
+    size_t i;
+
+    for (i = 0; i < MAX_BOMBS; ++i) {
+        explosion_t *explosion = &ctx->explosions[i];
+        if (!explosion->active) {
+            continue;
+        }
+
+        if (explosion->remaining_ticks > 0) {
+            explosion->remaining_ticks--;
+        }
+
+        if (explosion->remaining_ticks == 0) {
+            uint8_t payload[16];
+            size_t payload_len = 0;
+            msg_explosion_end_t msg;
+
+            msg.cell_index = explosion->cell_index;
+            if (proto_encode_explosion_end_payload(&msg, payload, sizeof(payload), &payload_len) == 0) {
+                server_broadcast(ctx, MSG_EXPLOSION_END, SERVER_ENDPOINT_ID, payload, payload_len, -1);
+            }
+            explosion->active = false;
+        }
+    }
+}
+
 static void maybe_finish_round(server_ctx_t *ctx) {
     size_t i;
     size_t alive_count = 0;
@@ -54,6 +81,8 @@ void server_tick(server_ctx_t *ctx) {
     bool exploded;
 
     ctx->state.tick++;
+
+    process_explosion_timers(ctx);
 
     if (ctx->state.status != GAME_RUNNING) {
         return;
